@@ -1,0 +1,155 @@
+#!/bin/bash -efu
+
+usage() {
+    echo "usage: $OCDEV_PROGNAME <command>"
+    echo
+    echo "Available commands:"
+    echo "  build            Build openshift binary"
+    echo "  docker-build     Cross-compile openshift binary for Docker"
+    echo "  build-image      "
+    echo "  start            Start the all-in-one OpenShift server in the foreground"
+    echo "  up               "
+    echo "  down             "
+    echo "  create-defaults  Create the user 'developer', the project 'myproject', and default imagestreams"
+    echo "  destroy          Remove generated config files, etcd data, volumes, etc"
+}
+
+ocdevopenshift-build() {
+    ocdev build cmd/openshift
+}
+
+ocdevopenshift-docker-build() {
+    ocdev docker-build cmd/openshift
+}
+
+ocdevopenshift-build-image() {
+    ocdevopenshift-docker-build
+    docker build -t ocdev-origin - <<'END'
+FROM fedora
+RUN dnf install -y iptables && dnf clean all
+EXPOSE 8443 53
+VOLUME /openshift/bin
+ENV OPENSHIFT_CONTAINERIZED=true
+ENTRYPOINT ["/openshift/bin/openshift"]
+END
+}
+
+ocdevopenshift-start() {
+    local openshift
+    if ! openshift=$(which openshift); then
+        fatal "start: failed to find openshift binary"
+    fi
+
+    local configdir="$OCDEV_VARDIR/openshift.local.config"
+    local etcddir="$OCDEV_VARDIR/openshift.local.etcd"
+    local volumedir="$OCDEV_VARDIR/openshift.local.volumes"
+
+    local hostname
+    hostname=$(hostname -f)
+
+    if [ ! -e "$configdir/master" -o ! -e "$configdir/node-$hostname" ]; then
+        "$openshift" start --write-config="$configdir" \
+            --images='openshift/origin-${component}:latest' \
+            --etcd-dir="$etcddir" \
+            --volume-dir="$volumedir"
+        sudo chmod +r "$configdir/master/admin.kubeconfig"
+        cp "$configdir/master/admin.kubeconfig" "$HOME/.kube/config"
+    fi
+
+    sudo "$openshift" start \
+        --master-config="$configdir/master/master-config.yaml" \
+        --node-config="$configdir/node-$(hostname)/node-config.yaml" \
+        "$@"
+}
+
+ocdevopenshift-up() {
+    ocdevutil-docker-init
+
+    local configdir="$OCDEV_VARDIR/docker/config"
+    local etcddir="$OCDEV_VARDIR/docker/etcd"
+    local volumedir="$OCDEV_VARDIR/docker/volumes"
+
+    [ -z "$(docker ps -aqf name='^/origin$')" ] || docker rm origin >/dev/null
+
+    local hostname
+    hostname=$(hostname -f)
+
+    local public
+    if [ ! -e "$configdir/master" -o ! -e "$configdir/node-$hostname" ]; then
+        local publicip
+        if ifconfig bridge100 >/dev/null 2>&1; then
+            # Docker for Mac
+            publicip=$(docker run --rm --net=host busybox sh -c 'ip -o -4 addr show eth1 | awk -F"[ /]+" "{print\$4}"')
+        else
+            publicip=127.0.0.1
+        fi
+        public="https://$publicip:8443"
+
+        docker run --rm --net=host --hostname="$hostname" \
+            -v "$configdir:/ocdev/docker/config" \
+            -v "$OCDEV_DOCKER_BINDIR:/openshift/bin" \
+            ocdev-origin start --write-config=/ocdev/docker/config \
+            --images='openshift/origin-${component}:latest' \
+            --public-master="$public"
+        if [ ! -r "$configdir/master/admin.kubeconfig" ]; then
+            sudo chmod +r "$configdir/master/admin.kubeconfig"
+        fi
+        if ifconfig bridge100 >/dev/null 2>&1; then
+            sed -i.bak -e "s,^\(current-context:\).*,\1 default/${publicip//./-}:8443/system:admin," "$configdir/master/admin.kubeconfig"
+        fi
+        cp "$configdir/master/admin.kubeconfig" "$HOME/.kube/config"
+    else
+        public=$(grep ^masterPublicURL: ~/.ocdev/docker/config/master/master-config.yaml | sed -e 's/^[^:]*: *//')
+    fi
+
+    local dockeropts=""
+
+    local cgroupdriver=$(docker info | grep '^Cgroup Driver:' | sed -e 's/^[^:]*: *//')
+    case "$cgroupdriver" in
+    systemd)
+        dockeropts="$dockeropts -v /var/run:/var/run:rw"
+        dockeropts="$dockeropts -v /sys/fs/cgroup:/sys/fs/cgroup:rw"
+    esac
+
+    docker run --rm --privileged --pid=host -v /:/rootfs busybox nsenter --mount=/rootfs/proc/1/ns/mnt -- mount --make-rshared /
+    docker run --rm -v /:/rootfs:rw busybox sh -c 'V=/rootfs/openshift.local.volumes; rm -rf $V && mkdir -p $V'
+    docker run -d --name=origin --privileged --net=host --hostname="$hostname" --pid=host \
+        -v "$configdir:/ocdev/docker/config" \
+        -v "$OCDEV_DOCKER_BINDIR:/openshift/bin" \
+        -v "/var/run/docker.sock:/var/run/docker.sock" \
+        -v "/:/rootfs:ro,slave" \
+        -v "/sys:/sys:ro" \
+        -v "/var/lib/docker/:/var/lib/docker:rw" \
+        -v "/dev:/dev:ro" \
+        -v "/openshift.local.volumes:/openshift.local.volumes:rw,rslave" \
+        $dockeropts \
+        ocdev-origin start \
+        --master-config="/ocdev/docker/config/master/master-config.yaml" \
+        --node-config="/ocdev/docker/config/node-$hostname/node-config.yaml" \
+        "$@"
+
+    echo
+    printf "%s\n" "$public"
+    echo
+}
+
+ocdevopenshift-down() {
+    docker kill origin
+}
+
+ocdevopenshift-logs() {
+    docker logs origin "$@"
+}
+
+ocdevopenshift-create-defaults() {
+    oc login -u developer -p developer
+    oc new-project myproject
+    ocdefault -n openshift create -f ./examples/image-streams/image-streams-centos7.json
+}
+
+ocdevopenshift-destroy() {
+    mount | grep -F "$OCDEV_VARDIR/openshift.local.volumes" | cut -d' ' -f3 | xargs -r sudo umount
+    sudo rm -rf "$OCDEV_VARDIR"
+}
+
+ocdevutil-main "ocdevopenshifthelper-" "ocdevopenshift-" "$@"

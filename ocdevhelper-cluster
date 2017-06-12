@@ -1,0 +1,36 @@
+#!/bin/bash -efu
+
+usage() {
+    echo "usage: $OCDEV_PROGNAME <command>"
+    echo
+    echo "Available commands:"
+    echo "  build-image  Build Docker images"
+    echo "  up           "
+}
+
+ocdevcluster-build() {
+    ocdev openshift build
+    ocdev registry build
+}
+
+ocdevcluster-build-image() {
+    ocdev openshift build-image
+    ocdev pod build-image
+    ocdev registry build-image
+}
+
+ocdevcluster-up() {
+    ocdev openshift up
+    local i
+    for i in {1..20}; do
+        [ "$(ocdefault get clusterroles 2>/dev/null | wc -l)" -eq 0 ] || break
+        sleep 0.1
+    done
+    ocdev openshift create-defaults
+}
+
+ocdevcluster-down() {
+    ocdev openshift down
+}
+
+ocdevutil-main "ocdevclusterhelper-" "ocdevcluster-" "$@"

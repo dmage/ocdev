@@ -1,0 +1,27 @@
+#!/bin/bash -efu
+
+usage() {
+    echo "usage: $OCDEV_PROGNAME <command>"
+    echo
+    echo "Available commands:"
+    echo "  build-image  Build openshift/origin-pod:latest Docker image"
+}
+
+ocdevpod-build-image() {
+    ocdevutil-docker-init
+
+    ocdev docker-build images/pod
+
+    local tmp
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}"/ocdev-pod.XXXXXXXX)
+    cp "$OCDEV_DOCKER_BINDIR/pod" "$tmp/pod"
+    printf >"$tmp/Dockerfile" "%s\n" \
+        'FROM scratch' \
+        'COPY pod /pod' \
+        'USER 1001' \
+        'ENTRYPOINT ["/pod"]'
+    docker build -t openshift/origin-pod:latest "$tmp"
+    rm -rf "$tmp"
+}
+
+ocdevutil-main "ocdevpodhelper-" "ocdevpod-" "$@"

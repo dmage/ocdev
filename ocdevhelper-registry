@@ -1,0 +1,210 @@
+#!/bin/bash -efu
+
+usage() {
+    echo "usage: $OCDEV_PROGNAME <command>"
+    echo
+    echo "Available commands:"
+    echo "  build        Build the dockerregistry binary"
+    echo "  build-image  Build the ocdev-registry:latest Docker image"
+    echo "  exec         Run a command in a running registry pod"
+    echo "  rollout      Redeploy the registry"
+    echo "  update       Rebuild and redeploy the registry"
+    echo "  up           Create Service and DeploymentConfig for the registry"
+    echo "  anonymous"
+    echo "  anonymous-myproject"
+    echo "  enable-metrics"
+    echo "  expose-secured"
+    echo "  generate-garbage"
+    echo "  logs"
+    echo "  test"
+}
+
+ocdevregistry-build() {
+    ocdev build cmd/dockerregistry
+}
+
+ocdevregistry-docker-build() {
+    ocdev docker-build cmd/dockerregistry
+}
+
+ocdevregistry-build-image() {
+    ocdevregistry-docker-build
+    docker build -t ocdev-registry - <<'END'
+FROM fedora
+USER 1001
+EXPOSE 5000
+ENV REGISTRY_CONFIGURATION_PATH=/openshift/images/dockerregistry/config.yml
+VOLUME /registry
+VOLUME /openshift/bin
+CMD DOCKER_REGISTRY_URL=${DOCKER_REGISTRY_SERVICE_HOST}:${DOCKER_REGISTRY_SERVICE_PORT} /openshift/bin/dockerregistry
+END
+}
+
+ocdevregistry-test() {
+    local origin=github.com/openshift/origin
+    go test -i -v $origin/cmd/dockerregistry/... $origin/pkg/cmd/dockerregistry/... $origin/pkg/dockerregistry/...
+    go test $origin/cmd/dockerregistry/... $origin/pkg/cmd/dockerregistry/... $origin/pkg/dockerregistry/...
+}
+
+ocdevregistry-up() {
+    ocdevutil-docker-init
+    local bindir="$OCDEV_DOCKER_BINDIR" imagesdir="$PWD/images"
+    oadm registry -o json |
+        jq --arg bindir "$bindir" --arg imagesdir "$imagesdir" '
+            path(.items[] | select(.kind == "Service" and .metadata.name == "docker-registry")) as $svc |
+            setpath($svc + ["spec", "clusterIP"]; "172.30.1.1") |
+
+            path(.items[] | select(.kind == "DeploymentConfig" and .metadata.name == "docker-registry")) as $dc |
+            ($dc + ["spec", "template", "spec", "volumes"]) as $volumes |
+            setpath($volumes; getpath($volumes) + [{
+                "name": "openshift-bin",
+                "hostPath": {
+                    "path": $bindir
+                }
+            }, {
+                "name": "openshift-images",
+                "hostPath": {
+                    "path": $imagesdir
+                }
+            }]) |
+
+            path(.items[] | select(.kind == "DeploymentConfig" and .metadata.name == "docker-registry") | .spec.template.spec.containers[] | select(.name == "registry")) as $container |
+            setpath($container + ["image"]; "ocdev-registry:latest") |
+            setpath($container + ["imagePullPolicy"]; "Never") |
+            setpath($container + ["volumeMounts"]; getpath($container + ["volumeMounts"]) + [{
+                "name": "openshift-bin",
+                "mountPath": "/openshift/bin"
+            }, {
+                "name": "openshift-images",
+                "mountPath": "/openshift/images"
+            }])
+        ' |
+        ocdefault create -f -
+    oadm policy add-scc-to-user hostaccess -z registry
+}
+
+ocdevregistry-rollout() {
+    ocdefault rollout latest dc/docker-registry || true
+    ocdefault rollout status dc/docker-registry
+}
+
+ocdevregistry-logs() {
+    ocdefault logs dc/docker-registry "$@"
+}
+
+ocdevregistry-update() {
+    ocdevregistry-build-image
+    ocdevregistry-rollout
+}
+
+ocdevregistry-exec() {
+    ocdefault exec -i -t "$(ocdefault get pods -l deploymentconfig=docker-registry -o name | sed -e 's!^pods/!!')" -- "$@"
+}
+
+ocdevregistry-enable-schema2() {
+    ocdefault patch dc docker-registry -p '{"spec": {"template":
+      {"spec": {"containers": [{
+        "name": "registry",
+        "env": [
+          {"name": "REGISTRY_MIDDLEWARE_REPOSITORY_OPENSHIFT_ACCEPTSCHEMA2", "value": "true"}
+        ]
+      }]}}
+    }}'
+    ocdefault rollout status dc/docker-registry
+}
+
+ocdevregistry-enable-metrics() {
+    ocdefault patch dc docker-registry -p '{"spec": {"template":
+      {"spec": {"containers": [{
+        "name": "registry",
+        "env": [
+          {"name": "REGISTRY_OPENSHIFT_METRICS_ENABLED", "value": "true"},
+          {"name": "REGISTRY_OPENSHIFT_METRICS_SECRET", "value": "mysecret"}
+        ]
+      }]}}
+    }}'
+    ocdefault rollout status dc/docker-registry
+}
+
+ocdevregistry-expose-secured() {
+    local master="$OCDEV_VARDIR/openshift.local.config/master"
+    oadm ca create-server-cert \
+        --signer-cert="$master/ca.crt" \
+        --signer-key="$master/ca.key" \
+        --signer-serial="$master/ca.serial.txt" \
+        --hostnames='registry.127.0.0.1.nip.io,docker-registry.default.svc.cluster.local,172.30.1.1' \
+        --cert="$OCDEV_VARDIR/registry-secrets/registry.crt" \
+        --key="$OCDEV_VARDIR/registry-secrets/registry.key"
+    ocdefault secrets new registry-secret \
+        "$OCDEV_VARDIR/registry-secrets/registry.crt" \
+        "$OCDEV_VARDIR/registry-secrets/registry.key" || true
+    ocdefault secrets link registry registry-secret
+    ocdefault secrets link default  registry-secret
+    ocdefault volume dc/docker-registry --add --type=secret \
+        --secret-name=registry-secret -m /etc/secrets || true
+    ocdefault set env dc/docker-registry \
+        REGISTRY_HTTP_TLS_CERTIFICATE=/etc/secrets/registry.crt \
+        REGISTRY_HTTP_TLS_KEY=/etc/secrets/registry.key
+    ocdefault patch dc/docker-registry -p '{"spec": {"template":
+      {"spec": {"containers":[{
+        "name":"registry",
+        "livenessProbe":  {"httpGet": {"scheme":"HTTPS"}},
+        "readinessProbe": {"httpGet": {"scheme":"HTTPS"}}
+      }]}}
+    }}'
+    ocdefault create route passthrough --service=docker-registry --hostname=registry.127.0.0.1.nip.io || true
+    sudo mkdir -p /etc/docker/certs.d/registry.127.0.0.1.nip.io
+    sudo cp "$master/ca.crt" /etc/docker/certs.d/registry.127.0.0.1.nip.io/ca.crt
+    ocdefault rollout status dc/docker-registry
+    ocdefault rollout status dc/router
+    echo
+    echo 'Done. You can check it using the command:'
+    echo
+    echo '  curl -v -k https://registry.127.0.0.1.nip.io/v2/'
+    echo
+}
+
+ocdevregistry-anonymous() {
+    oadm policy add-cluster-role-to-user registry-viewer system:anonymous
+}
+
+ocdevregistry-anonymous-myproject() {
+    oc policy add-role-to-user registry-viewer system:anonymous -n myproject
+}
+
+docker-force-pull() {
+    docker pull "$1"
+    docker rmi -f "$(docker inspect --format="{{.ID}}" "$1")"
+    docker pull "$1"
+    docker rmi "$1"
+}
+
+ocdevregistry-generate-garbage() {
+    ocdev login-as-developer
+    oc project myproject
+    docker login -u $(oc whoami) -p $(oc whoami -t) 172.30.1.1:5000
+
+    oc import-image dmage-a --from=dmage/example:a --confirm
+    docker-force-pull 172.30.1.1:5000/myproject/dmage-a
+    oc import-image dmage-b --from=dmage/example:b --confirm
+    docker-force-pull 172.30.1.1:5000/myproject/dmage-b
+    oc delete is/dmage-b
+
+    docker pull busybox
+    docker pull busybox:glibc
+    docker tag busybox 172.30.1.1:5000/myproject/busybox
+    docker push 172.30.1.1:5000/myproject/busybox
+    docker tag busybox:glibc 172.30.1.1:5000/myproject/busybox-glibc
+    docker push 172.30.1.1:5000/myproject/busybox-glibc
+    oc delete is/busybox-glibc
+    ocdefault delete image $(ocdefault get images | grep -F /myproject/busybox-glibc@ | cut -d' ' -f1)
+}
+
+ocdevregistry-login-docker() {
+    local U P
+    U="$(oc whoami)"
+    P="$(oc whoami -t)"
+    docker login -u "$U" -p "$P" 172.30.1.1:5000
+}
+
+ocdevutil-main "ocdevregistryhelper-" "ocdevregistry-" "$@"

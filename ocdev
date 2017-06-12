@@ -1,0 +1,258 @@
+#!/bin/bash
+# vim:set foldmethod=marker:
+set -efu
+
+export OCDEV_VARDIR=${OCDEV_VARDIR:-$HOME/.ocdev}
+export OCDEV_GOLANG_IMAGE=${OCDEV_GOLANG_IMAGE:-golang:1.7}
+OCDEV_PROGNAME=$(basename "$0")
+
+usage() {
+    echo "usage: $OCDEV_PROGNAME <command>"
+    echo
+    echo "Available commands:"
+    echo "  show-toplevel       Show the absolute path of the top-level directory"
+    echo "  show-bindir         Show the absolute path of the directory with OpenShift binaries"
+    echo "  env                 Show adjusted environment variables"
+    echo "  oc                  Run oc from the current source tree"
+    echo "  ocdefault           Run oc command as the system:admin user in the default namespace"
+    echo "  oadm                Run openshift admin as the system:admin user"
+    echo "  exec                Run a program from the directory with OpenShift binaries"
+    echo "  build               Build an OpenShift binary"
+    echo "  docker-build        Cross-compile an OpenShift binary for a Docker image"
+    echo "  login-as-developer  Login as the developer user"
+    echo "  login-as-pruner     Login as the pruner user"
+    echo
+    echo "Commands for components:"
+    echo "  cluster             Manage an OpenShift cluster"
+    echo "  openshift           Manage the OpenShift server"
+    echo "  pod                 Manage the pod image"
+    echo "  registry            Manage the integrated Docker registry"
+    echo "  prometheus          Manage Prometheus"
+    echo "  create-defaults     Create the user 'developer', the project 'myproject', and default imagestreams"
+    echo
+    echo "Usage examples:"
+    echo "  ./hack/build-go.sh cmd/oc"
+    echo "  ocdev cluster build"
+    echo "  ocdev openshift start --loglevel=4"
+    echo "  ocdev registry up"
+    echo
+    echo "  ocdev registry update"
+}
+
+# {{{ unprefixed utils
+
+warn() {
+    printf "%s: %s\n" "$OCDEV_PROGNAME" "$*" >&2
+}
+export -f warn
+
+fatal() {
+    warn "$@"
+    exit 1
+}
+export -f fatal
+
+ocdefault() {
+    oc --context=$(kubectl config current-context | sed -e 's,^[^/]*,default,' -e 's,[^/]*$,system:admin,') "$@"
+}
+export -f ocdefault
+
+oadm() {
+    ocdefault adm "$@"
+}
+export -f oadm
+
+# }}}
+
+# {{{ ocdevutil
+
+ocdevutil-commands() {
+    for prefix do
+        compgen -c "$prefix" | while read -r cmd; do
+            printf "%s\n" "${cmd#$prefix}"
+        done
+    done
+}
+export -f ocdevutil-commands
+
+ocdevutil-init() {
+    local err=0
+    OCDEV_TOPLEVEL=$(git rev-parse --show-toplevel) || err=$?
+    if [ "$err" -ne 0 ]; then
+        echo
+        echo "You are expected to run $OCDEV_PROGNAME from OpenShift's git repository."
+        exit "$err"
+    fi
+
+    export OCDEV_BINDIR="$OCDEV_TOPLEVEL/_output/local/bin/$(go env GOOS)/$(go env GOARCH)"
+
+    local oc=$(which oc 2>/dev/null)
+    if [ "$oc" != "$OCDEV_BINDIR/oc" ]; then
+        export PATH="$OCDEV_BINDIR:$PATH"
+    fi
+}
+export -f ocdevutil-init
+
+ocdevutil-docker-init() {
+    [ -n "${OCDEV_DOCKER_GOOS-}" ] || OCDEV_DOCKER_GOOS=$(docker run --rm "$OCDEV_GOLANG_IMAGE" go env GOOS)
+    [ -n "${OCDEV_DOCKER_GOARCH-}" ] || OCDEV_DOCKER_GOARCH=$(docker run --rm "$OCDEV_GOLANG_IMAGE" go env GOARCH)
+    export OCDEV_DOCKER_GOOS OCDEV_DOCKER_GOARCH
+
+    export OCDEV_DOCKER_BINDIR="$PWD/_output/local/bin/$OCDEV_DOCKER_GOOS/$OCDEV_DOCKER_GOARCH"
+}
+export -f ocdevutil-docker-init
+
+ocdevutil-main() {
+    [ -z "${OCDEV_TRACE-}" ] || set -x
+
+    local helperprefix=$1 prefix=$2; shift 2
+
+    [ $# -ge 1 ] || { usage >&2; exit 1; }
+
+    if type "$helperprefix$1" >/dev/null 2>&1; then
+        export OCDEV_PROGNAME="${OCDEV_PROGNAME-}${OCDEV_PROGNAME:+ }$1"
+        "$helperprefix$@"
+        exit
+    fi
+
+    if [ "$1" == "commands" ]; then
+        if [ $# -eq 1 ]; then
+            echo "commands"
+            ocdevutil-commands "$helperprefix" "$prefix"
+        elif type "$helperprefix$2" >/dev/null 2>&1; then
+            local helper="$helperprefix$2"; shift 2
+            "$helper" commands "$@"
+        fi
+        exit
+    fi
+
+    ocdevutil-init
+    cd "$OCDEV_TOPLEVEL"
+
+    if type "$prefix$1" >/dev/null 2>&1; then
+        export OCDEV_PROGNAME="${OCDEV_PROGNAME-}${OCDEV_PROGNAME:+ }$1"
+        "$prefix$@"
+    else
+        usage >&2
+        exit 1
+    fi
+}
+export -f ocdevutil-main
+
+# }}}
+
+# {{{ ocdevhelper
+
+ocdevhelper-bash-completion() {
+    cat <<'END'
+_ocdev()
+{
+    local commands=$(ocdev commands "${COMP_WORDS[@]:1:COMP_CWORD-1}")
+    COMPREPLY=( $(compgen -W "${commands}" -- "${COMP_WORDS[COMP_CWORD]}") )
+    return 0
+}
+complete -o bashdefault -o default -F _ocdev ocdev
+END
+}
+
+ocdevhelper-oc() {
+    ocdevutil-init
+    oc "$@"
+}
+
+ocdevhelper-ocdefault() {
+    ocdevutil-init
+    ocdefault "$@"
+}
+
+ocdevhelper-oadm() {
+    ocdevutil-init
+    oadm "$@"
+}
+
+ocdevhelper-exec() {
+    ocdevutil-init
+
+    # hide internals (ocdev-show-toplevel, usage, etc)
+    local prog name=$1; shift
+    if ! prog=$(which "$name"); then
+        exit 1
+    fi
+
+    "$prog" "$@"
+}
+
+# }}}
+
+# {{{ ocdev
+
+ocdev-show-toplevel() {
+    pwd
+}
+
+ocdev-show-bindir() {
+    echo "$OCDEV_BINDIR"
+}
+
+ocdev-env() {
+    printf "export PATH=%q\n" "$PATH"
+}
+
+ocdev-build() {
+    local GOOS=$(go env GOOS) GOARCH=$(go env GOARCH)
+    local bindir="$PWD/_output/local/bin/$GOOS/$GOARCH"
+    local pkgdir="$PWD/_output/local/pkgdir/$GOOS/$GOARCH"
+
+    local tags='include_gcs include_oss containers_image_openpgp'
+    local ldflags=''
+    ldflags="$ldflags -X github.com/openshift/origin/pkg/bootstrap/docker.defaultImageStreams=centos7"
+    ldflags="$ldflags -X github.com/openshift/origin/pkg/cmd/util/variable.DefaultImagePrefix=openshift/origin"
+
+    # https://github.com/golang/go/issues/11778
+    # https://github.com/golang/go/issues/13063
+    local pkg
+    for pkg do
+        local name=${pkg##*/}
+        if [ -z "$name" ]; then
+            warn "$pkg: trailing slash? skipped"
+            continue
+        fi
+
+        if [ "$GOOS" == "$(go env GOHOSTOS)" -a "$GOARCH" == "$(go env GOHOSTARCH)" ]; then
+            go build -pkgdir "$pkgdir" -tags "$tags" -ldflags="$ldflags" -i -o "$bindir/$name" -v "github.com/openshift/origin/$pkg"
+        elif [ "$GOOS" == "${OSDEV_DOCKER_GOOS-linux}" -a "$GOARCH" == "${OSDEV_DOCKER_GOARCH-amd64}" ]; then
+            echo "CROSS-COMPILE using Docker $OCDEV_GOLANG_IMAGE"
+            local w="/go/src/github.com/openshift/origin"
+            docker run --rm -i \
+                -v "$PWD:$w:ro,delegated" -w "$PWD" \
+                -v "$bindir:$w/_output/local/bin/$GOOS/$GOARCH:rw,delegated" -v "$pkgdir:$w/_output/local/pkgdir/$GOOS/$GOARCH:rw,delegated" \
+                "$OCDEV_GOLANG_IMAGE" \
+                go build -pkgdir "$w/_output/local/pkgdir/$GOOS/$GOARCH" -tags "$tags" -ldflags="$ldflags" -i -o "$w/_output/local/bin/$GOOS/$GOARCH/$name" -v "github.com/openshift/origin/$pkg"
+        else
+            fatal "unsupport GOOS=$GOOS GOARCH=$GOARCH"
+        fi
+    done
+}
+
+ocdev-docker-build() {
+    ocdevutil-docker-init
+    GOOS=$OCDEV_DOCKER_GOOS GOARCH=$OCDEV_DOCKER_GOARCH CGO_ENABLED=1 ocdev-build "$@"
+}
+
+ocdev-login-as-developer() {
+    oc login -u developer
+}
+
+ocdev-login-as-pruner() {
+    oc login -u pruner -p pruner
+    oadm policy add-cluster-role-to-user system:image-pruner pruner
+}
+
+# }}}
+
+ocdev-start-router() {
+    oadm policy add-scc-to-user hostnetwork -z router
+    oadm router
+}
+
+ocdevutil-main "ocdevhelper-" "ocdev-" "$@"
