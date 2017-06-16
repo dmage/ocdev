@@ -53,10 +53,10 @@ ocdevopenshift-start() {
             --etcd-dir="$etcddir" \
             --volume-dir="$volumedir"
         sudo chmod +r "$configdir/master/admin.kubeconfig"
-        cp "$configdir/master/admin.kubeconfig" "$HOME/.kube/config"
     fi
+    cp "$configdir/master/admin.kubeconfig" "$HOME/.kube/config"
 
-    sudo "$openshift" start \
+    sudo -E "$openshift" start \
         --master-config="$configdir/master/master-config.yaml" \
         --node-config="$configdir/node-$(hostname)/node-config.yaml" \
         "$@"
@@ -97,10 +97,10 @@ ocdevopenshift-up() {
         if ifconfig bridge100 >/dev/null 2>&1; then
             sed -i.bak -e "s,^\(current-context:\).*,\1 default/${publicip//./-}:8443/system:admin," "$configdir/master/admin.kubeconfig"
         fi
-        cp "$configdir/master/admin.kubeconfig" "$HOME/.kube/config"
     else
         public=$(grep ^masterPublicURL: ~/.ocdev/docker/config/master/master-config.yaml | sed -e 's/^[^:]*: *//')
     fi
+    cp "$configdir/master/admin.kubeconfig" "$HOME/.kube/config"
 
     local dockeropts=""
 
