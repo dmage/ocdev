@@ -303,7 +303,11 @@ ocdev-godoc() {
         done
         open_url "http://localhost:6060/pkg/github.com/openshift/origin/"
     }&
-    GOPATH="$_TMP" godoc -http=:6060
+    local err=0
+    GOPATH="$_TMP" godoc -http=:6060 "$@" || err=$?
+    kill %1
+    wait
+    exit $err
 }
 
 # }}}
