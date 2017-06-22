@@ -248,6 +248,64 @@ ocdev-login-as-pruner() {
     oadm policy add-cluster-role-to-user system:image-pruner pruner
 }
 
+ocdev-godoc() {
+    if ! type bindfs >/dev/null 2>/dev/null; then
+        printf "%s\n" >&2 \
+            "This command requires bindfs to be installed." \
+            "" \
+            "Fedora: dnf install bindfs" \
+            "Gentoo: emerge -av bindfs" \
+            "macOS: brew install bindfs" \
+            "Ubuntu: apt-get install bindfs" \
+            "" \
+            "Please visit http://bindfs.org/ for other options." \
+            ""
+        fatal "findfs is not found"
+    fi
+
+    open_url() {
+        echo "$1"
+        if type xdg-open >/dev/null 2>&1; then
+            xdg-open "$1"
+        else
+            open "$1"
+        fi || true
+    }
+
+    fuse_unmount() {
+        if type fusermount >/dev/null 2>&1; then
+            fusermount -q -u "$@"
+        else
+            umount "$@"
+        fi
+    }
+
+    local origin
+    origin=$(go list -f "{{.Dir}}" github.com/openshift/origin)
+
+    _TMP=$(mktemp -d "${TMPDIR:-/tmp}"/ocdev-godoc.XXXXXXXX)
+    cleanup() {
+        trap - EXIT
+        fuse_unmount "$_TMP/src/github.com/openshift/origin" || true
+        rm -rf "$_TMP"
+        exit "$1"
+    }
+    trap 'cleanup $?' EXIT
+    trap 'cleanup 1' HUP PIPE INT QUIT TERM
+
+    mkdir -p "$_TMP/src/github.com/openshift/origin"
+    bindfs --no-allow-other "$origin" "$_TMP/src/github.com/openshift/origin"
+
+    {
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+            curl -fs --max-time 1 "http://localhost:6060/" >/dev/null && break
+            sleep 0.5
+        done
+        open_url "http://localhost:6060/pkg/github.com/openshift/origin/"
+    }&
+    GOPATH="$_TMP" godoc -http=:6060
+}
+
 # }}}
 
 ocdev-start-router() {
