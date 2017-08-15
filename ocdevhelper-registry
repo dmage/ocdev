@@ -31,12 +31,15 @@ ocdevregistry-build-image() {
     ocdevregistry-docker-build
     docker build -t ocdev-registry - <<'END'
 FROM fedora
+RUN ln -s /openshift/images/dockerregistry/config.yml /config.yml && \
+    mkdir -p /usr/bin && \
+    ln -s /openshift/bin/dockerregistry /usr/bin/dockerregistry
 USER 1001
 EXPOSE 5000
-ENV REGISTRY_CONFIGURATION_PATH=/openshift/images/dockerregistry/config.yml
+ENV REGISTRY_CONFIGURATION_PATH=/config.yml
 VOLUME /registry
 VOLUME /openshift/bin
-CMD DOCKER_REGISTRY_URL=${DOCKER_REGISTRY_SERVICE_HOST}:${DOCKER_REGISTRY_SERVICE_PORT} /openshift/bin/dockerregistry
+CMD DOCKER_REGISTRY_URL=${DOCKER_REGISTRY_SERVICE_HOST}:${DOCKER_REGISTRY_SERVICE_PORT} /usr/bin/dockerregistry
 END
 }
 
@@ -44,6 +47,14 @@ ocdevregistry-test() {
     local origin=github.com/openshift/origin
     go test -i -v $origin/cmd/dockerregistry/... $origin/pkg/cmd/dockerregistry/... $origin/pkg/dockerregistry/...
     go test $origin/cmd/dockerregistry/... $origin/pkg/cmd/dockerregistry/... $origin/pkg/dockerregistry/...
+}
+
+ocdevregistry-test-extended() {
+    # we want to have an up-to-date version of extended.test
+    rm -v "$OCDEV_DOCKER_BINDIR/extended.test" || true
+
+    # core.sh wants to have iptables in PATH
+    PATH="$PATH:/sbin" PRINT_TESTS=1 ./test/extended/core.sh --ginkgo.focus="\[Feature:ImagePrune\]|\[Feature:ImageQuota\]|\[imageapis\]|\[registry\]"
 }
 
 ocdevregistry-up() {
@@ -124,6 +135,12 @@ ocdevregistry-enable-metrics() {
       }]}}
     }}'
     ocdefault rollout status dc/docker-registry
+    echo
+    echo 'Done. You can check it using the command:'
+    echo
+    echo '  curl -v -H "Authorization: Bearer mysecret" http://172.30.1.1:5000/extensions/v2/metrics'
+    echo
+
 }
 
 ocdevregistry-expose-secured() {
@@ -170,6 +187,33 @@ ocdevregistry-anonymous() {
 
 ocdevregistry-anonymous-myproject() {
     oc policy add-role-to-user registry-viewer system:anonymous -n myproject
+}
+
+ocdevregistry-enable-web-profile() {
+    ocdefault patch dc docker-registry -p '{"spec": {"template":
+      {"spec": {"containers": [{
+        "name": "registry",
+        "env": [
+          {"name": "OPENSHIFT_PROFILE", "value": "web"}
+        ]
+      }]}}
+    }}'
+    ocdefault rollout status dc/docker-registry
+    echo
+    echo 'Done. You can check it using the command:'
+    echo
+    echo '  ocdev registry pprof /debug/pprof/heap -inuse_space'
+    echo
+}
+
+ocdevregistry-pprof() {
+    local err=0 pod tmp path="$1"; shift
+    pod=$(ocdefault get pods -l deploymentconfig=docker-registry -o jsonpath='{.items[0].metadata.name}')
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}"/ocdev-registry-pprof.XXXXXXXX)
+    ocdefault exec "$pod" -- wget -q "http://127.0.0.1:6060$path" -O - >"$tmp/profile"
+    go tool pprof "$@" "$(which dockerregistry)" "$tmp/profile" || err=$?
+    rm -rf "$tmp"
+    exit $err
 }
 
 docker-force-pull() {

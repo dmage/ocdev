@@ -27,6 +27,7 @@ ocdevcluster-up() {
         sleep 0.1
     done
     ocdev openshift create-defaults
+    ocdev registry up
 }
 
 ocdevcluster-down() {

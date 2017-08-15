@@ -147,6 +147,10 @@ ocdevopenshift-create-defaults() {
     ocdefault -n openshift create -f ./examples/image-streams/image-streams-centos7.json
 }
 
+ocdevopenshift-anonymous-debug() {
+    ocdefault adm policy add-cluster-role-to-user cluster-debugger system:anonymous
+}
+
 ocdevopenshift-destroy() {
     mount | grep -F "$OCDEV_VARDIR/openshift.local.volumes" | cut -d' ' -f3 | xargs -r sudo umount
     sudo rm -rf "$OCDEV_VARDIR"
