@@ -46,7 +46,7 @@ END
 ocdevregistry-test() {
     local origin=github.com/openshift/origin
     go test -i -v $origin/cmd/dockerregistry/... $origin/pkg/cmd/dockerregistry/... $origin/pkg/dockerregistry/...
-    go test $origin/cmd/dockerregistry/... $origin/pkg/cmd/dockerregistry/... $origin/pkg/dockerregistry/...
+    go test $origin/cmd/dockerregistry/... $origin/pkg/cmd/dockerregistry/... $origin/pkg/dockerregistry/... "$@"
 }
 
 ocdevregistry-test-extended() {
