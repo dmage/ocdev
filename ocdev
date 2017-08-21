@@ -3,7 +3,7 @@
 set -efu
 
 export OCDEV_VARDIR=${OCDEV_VARDIR:-$HOME/.ocdev}
-export OCDEV_GOLANG_IMAGE=${OCDEV_GOLANG_IMAGE:-golang:1.7}
+export OCDEV_GOLANG_IMAGE=${OCDEV_GOLANG_IMAGE:-golang:1.8}
 OCDEV_PROGNAME=$(basename "$0")
 
 usage() {
@@ -139,6 +139,47 @@ ocdevutil-main() {
 }
 export -f ocdevutil-main
 
+ocdevutil-remove-image() {
+    if docker images -q "$1" | grep . >/dev/null; then
+        docker rmi "$1"
+    fi
+}
+export -f ocdevutil-remove-image
+
+export OCDEV_BUILD_IMAGE_TMP=
+export OCDEV_BUILD_IMAGE_PWD=
+export OCDEV_BUILD_IMAGE_SAVE_TRAPS=
+ocdevutil-build-image-cleanup() {
+    eval "$OCDEV_BUILD_IMAGE_SAVE_TRAPS"
+    cd "$OCDEV_BUILD_IMAGE_PWD"
+    rm -rf "$OCDEV_BUILD_IMAGE_TMP"
+    OCDEV_BUILD_IMAGE_TMP=
+    [ $# -eq 0 ] || exit "$1"
+}
+export -f ocdevutil-build-image-cleanup
+
+ocdevutil-build-image() {
+    ocdevutil-docker-init
+
+    local generator=$1 name=$2; shift 2
+
+    if [ -n "$OCDEV_BUILD_IMAGE_TMP" ]; then
+        fatal "detected recursion in ocdevutil-build-image $2; prevoius tmp directory: $OCDEV_BUILD_IMAGE_TMP"
+    fi
+
+    OCDEV_BUILD_IMAGE_SAVE_TRAPS=$(trap)
+    trap 'ocdevutil-build-image-cleanup $?' EXIT
+    trap 'ocdevutil-build-image-cleanup 1' HUP PIPE INT QUIT TERM
+
+    OCDEV_BUILD_IMAGE_PWD=$(pwd)
+    OCDEV_BUILD_IMAGE_TMP=$(mktemp -d "${TMPDIR:-/tmp}"/$name.XXXXXXXX)
+    cd "$OCDEV_BUILD_IMAGE_TMP"
+    $generator
+    docker build -t "$name" "$@" "$OCDEV_BUILD_IMAGE_TMP"
+    ocdevutil-build-image-cleanup
+}
+export -f ocdevutil-build-image
+
 # }}}
 
 # {{{ ocdevhelper
@@ -173,7 +214,8 @@ ocdevhelper-oadm() {
 ocdevhelper-exec() {
     ocdevutil-init
 
-    # hide internals (ocdev-show-toplevel, usage, etc)
+    # hide internals (ocdev-show-toplevel, usage, etc),
+    # because `ocdev exec ocdev-show-toplevel` should not work.
     local prog name=$1; shift
     if ! prog=$(which "$name"); then
         exit 1
@@ -199,42 +241,11 @@ ocdev-env() {
 }
 
 ocdev-build() {
-    local GOOS=$(go env GOOS) GOARCH=$(go env GOARCH)
-    local bindir="$PWD/_output/local/bin/$GOOS/$GOARCH"
-    local pkgdir="$PWD/_output/local/pkgdir/$GOOS/$GOARCH"
-
-    local tags='include_gcs include_oss containers_image_openpgp'
-    local ldflags=''
-    ldflags="$ldflags -X github.com/openshift/origin/pkg/bootstrap/docker.defaultImageStreams=centos7"
-    ldflags="$ldflags -X github.com/openshift/origin/pkg/cmd/util/variable.DefaultImagePrefix=openshift/origin"
-
-    # https://github.com/golang/go/issues/11778
-    # https://github.com/golang/go/issues/13063
-    local pkg
-    for pkg do
-        local name=${pkg##*/}
-        if [ -z "$name" ]; then
-            warn "$pkg: trailing slash? skipped"
-            continue
-        fi
-
-        if [ "$GOOS" == "$(go env GOHOSTOS)" -a "$GOARCH" == "$(go env GOHOSTARCH)" ]; then
-            go build -pkgdir "$pkgdir" -tags "$tags" -ldflags="$ldflags" -i -o "$bindir/$name" -v "github.com/openshift/origin/$pkg"
-        elif [ "$GOOS" == "${OSDEV_DOCKER_GOOS-linux}" -a "$GOARCH" == "${OSDEV_DOCKER_GOARCH-amd64}" ]; then
-            echo "CROSS-COMPILE using Docker $OCDEV_GOLANG_IMAGE"
-            local w="/go/src/github.com/openshift/origin"
-            docker run --rm -i \
-                -v "$PWD:$w:ro,delegated" -w "$PWD" \
-                -v "$bindir:$w/_output/local/bin/$GOOS/$GOARCH:rw,delegated" -v "$pkgdir:$w/_output/local/pkgdir/$GOOS/$GOARCH:rw,delegated" \
-                "$OCDEV_GOLANG_IMAGE" \
-                go build -pkgdir "$w/_output/local/pkgdir/$GOOS/$GOARCH" -tags "$tags" -ldflags="$ldflags" -i -o "$w/_output/local/bin/$GOOS/$GOARCH/$name" -v "github.com/openshift/origin/$pkg"
-        else
-            fatal "unsupport GOOS=$GOOS GOARCH=$GOARCH"
-        fi
-    done
+    ./hack/build-go.sh "$@"
 }
 
 ocdev-docker-build() {
+    # FIXME(dmage): fix it for macOS
     ocdevutil-docker-init
     GOOS=$OCDEV_DOCKER_GOOS GOARCH=$OCDEV_DOCKER_GOARCH CGO_ENABLED=1 ocdev-build "$@"
 }

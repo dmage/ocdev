@@ -27,20 +27,20 @@ ocdevregistry-docker-build() {
     ocdev docker-build cmd/dockerregistry
 }
 
+origin_docker_registry_image() {
+    cp "$OCDEV_DOCKER_BINDIR/dockerregistry" ./
+    printf >./Dockerfile "%s\n" \
+        'FROM openshift/origin-docker-registry:latest' \
+        'USER 0' \
+        'COPY dockerregistry /openshift/bin/' \
+        'RUN ln -sf /openshift/bin/dockerregistry /usr/bin/' \
+        'USER 1001'
+}
+
 ocdevregistry-build-image() {
     ocdevregistry-docker-build
-    docker build -t ocdev-registry - <<'END'
-FROM fedora
-RUN ln -s /openshift/images/dockerregistry/config.yml /config.yml && \
-    mkdir -p /usr/bin && \
-    ln -s /openshift/bin/dockerregistry /usr/bin/dockerregistry
-USER 1001
-EXPOSE 5000
-ENV REGISTRY_CONFIGURATION_PATH=/config.yml
-VOLUME /registry
-VOLUME /openshift/bin
-CMD DOCKER_REGISTRY_URL=${DOCKER_REGISTRY_SERVICE_HOST}:${DOCKER_REGISTRY_SERVICE_PORT} /usr/bin/dockerregistry
-END
+    ocdevutil-remove-image openshift/origin-docker-registry:latest
+    ocdevutil-build-image origin_docker_registry_image openshift/origin-docker-registry:latest
 }
 
 ocdevregistry-test() {
@@ -51,7 +51,7 @@ ocdevregistry-test() {
 
 ocdevregistry-test-extended() {
     # we want to have an up-to-date version of extended.test
-    rm -v "$OCDEV_DOCKER_BINDIR/extended.test" || true
+    rm -v "$OCDEV_BINDIR/extended.test" || true
 
     # core.sh wants to have iptables in PATH
     PATH="$PATH:/sbin" PRINT_TESTS=1 ./test/extended/core.sh --ginkgo.focus="\[Feature:ImagePrune\]|\[Feature:ImageQuota\]|\[imageapis\]|\[registry\]"

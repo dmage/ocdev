@@ -7,21 +7,18 @@ usage() {
     echo "  build-image  Build openshift/origin-pod:latest Docker image"
 }
 
-ocdevpod-build-image() {
-    ocdevutil-docker-init
-
-    ocdev docker-build images/pod
-
-    local tmp
-    tmp=$(mktemp -d "${TMPDIR:-/tmp}"/ocdev-pod.XXXXXXXX)
-    cp "$OCDEV_DOCKER_BINDIR/pod" "$tmp/pod"
-    printf >"$tmp/Dockerfile" "%s\n" \
+pod_image() {
+    cp "$OCDEV_DOCKER_BINDIR/pod" ./pod
+    printf >./Dockerfile "%s\n" \
         'FROM scratch' \
         'COPY pod /pod' \
         'USER 1001' \
         'ENTRYPOINT ["/pod"]'
-    docker build -t openshift/origin-pod:latest "$tmp"
-    rm -rf "$tmp"
+}
+
+ocdevpod-build-image() {
+    ocdev docker-build images/pod
+    ocdevutil-build-image pod_image openshift/origin-pod:latest
 }
 
 ocdevutil-main "ocdevpodhelper-" "ocdevpod-" "$@"

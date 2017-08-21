@@ -22,16 +22,18 @@ ocdevopenshift-docker-build() {
     ocdev docker-build cmd/openshift
 }
 
+origin_image() {
+    cp "$OCDEV_DOCKER_BINDIR/openshift" ./openshift
+    printf >./Dockerfile "%s\n" \
+        'FROM openshift/origin:latest' \
+        'COPY openshift /openshift/bin/openshift' \
+        'RUN ln -sf /openshift/bin/openshift /usr/bin/openshift'
+}
+
 ocdevopenshift-build-image() {
     ocdevopenshift-docker-build
-    docker build -t ocdev-origin - <<'END'
-FROM fedora
-RUN dnf install -y iptables && dnf clean all
-EXPOSE 8443 53
-VOLUME /openshift/bin
-ENV OPENSHIFT_CONTAINERIZED=true
-ENTRYPOINT ["/openshift/bin/openshift"]
-END
+    ocdevutil-remove-image openshift/origin:latest
+    ocdevutil-build-image origin_image openshift/origin:latest
 }
 
 ocdevopenshift-start() {
