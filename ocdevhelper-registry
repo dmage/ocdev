@@ -5,7 +5,7 @@ usage() {
     echo
     echo "Available commands:"
     echo "  build        Build the dockerregistry binary"
-    echo "  build-image  Build the ocdev-registry:latest Docker image"
+    echo "  build-image  Build the openshift/origin-docker-registry:latest Docker image"
     echo "  exec         Run a command in a running registry pod"
     echo "  rollout      Redeploy the registry"
     echo "  update       Rebuild and redeploy the registry"
@@ -80,7 +80,7 @@ ocdevregistry-up() {
             }]) |
 
             path(.items[] | select(.kind == "DeploymentConfig" and .metadata.name == "docker-registry") | .spec.template.spec.containers[] | select(.name == "registry")) as $container |
-            setpath($container + ["image"]; "ocdev-registry:latest") |
+            setpath($container + ["image"]; "openshift/origin-docker-registry:latest") |
             setpath($container + ["imagePullPolicy"]; "Never") |
             setpath($container + ["volumeMounts"]; getpath($container + ["volumeMounts"]) + [{
                 "name": "openshift-bin",

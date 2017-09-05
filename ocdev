@@ -321,6 +321,20 @@ ocdev-godoc() {
     exit $err
 }
 
+ocdev-test-end-to-end() {
+    findmnt -lo TARGET | grep ^/tmp/openshift/ | xargs -r sudo umount
+    sudo rm -rf /tmp/openshift /var/lib/origin/openshift.local.pv/registry
+
+    for i in docker-builder deployer keepalived-ipfailover haproxy-router; do
+        docker pull openshift/origin-$i:latest
+    done
+    ocdev cluster build-image
+
+    docker images --filter "reference=openshift/origin*:latest" --format="{{.Repository}}" | xargs -r -I {} docker tag {}:latest {}:local-end-to-end
+    USE_IMAGES='openshift/origin-${component}:local-end-to-end' TAG=local-end-to-end ./hack/test-end-to-end.sh
+    docker images --filter "reference=openshift/origin*:local-end-to-end" --format="{{.Repository}}:{{.Tag}}" | xargs -r docker rmi
+}
+
 # }}}
 
 ocdev-start-router() {
