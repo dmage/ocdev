@@ -104,7 +104,7 @@ ocdevregistry-logs() {
 }
 
 ocdevregistry-update() {
-    ocdevregistry-build-image
+    ocdevregistry-docker-build
     ocdevregistry-rollout
 }
 
