@@ -54,7 +54,7 @@ ocdevregistry-test-extended() {
     rm -v "$OCDEV_BINDIR/extended.test" || true
 
     # core.sh wants to have iptables in PATH
-    PATH="$PATH:/sbin" PRINT_TESTS=1 ./test/extended/core.sh --ginkgo.focus="\[Feature:ImagePrune\]|\[Feature:ImageQuota\]|\[imageapis\]|\[registry\]"
+    FOCUS="\[Feature:ImagePrune\]|\[Feature:ImageQuota\]|\[imageapis\]|\[registry\]" PATH="$PATH:/sbin" PRINT_TESTS=1 ./test/extended/core.sh
 }
 
 ocdevregistry-up() {
