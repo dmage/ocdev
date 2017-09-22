@@ -47,7 +47,7 @@ ocdevopenshift-start() {
     local volumedir="$OCDEV_VARDIR/openshift.local.volumes"
 
     local hostname
-    hostname=$(hostname -f)
+    hostname=$(hostname)
 
     if [ ! -e "$configdir/master" -o ! -e "$configdir/node-$hostname" ]; then
         "$openshift" start --write-config="$configdir" \
@@ -74,7 +74,7 @@ ocdevopenshift-up() {
     [ -z "$(docker ps -aqf name='^/origin$')" ] || docker rm origin >/dev/null
 
     local hostname
-    hostname=$(hostname -f)
+    hostname=$(hostname)
 
     local public
     if [ ! -e "$configdir/master" -o ! -e "$configdir/node-$hostname" ]; then
