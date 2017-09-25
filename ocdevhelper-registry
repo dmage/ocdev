@@ -29,11 +29,14 @@ ocdevregistry-docker-build() {
 
 origin_docker_registry_image() {
     cp "$OCDEV_DOCKER_BINDIR/dockerregistry" ./
+    cp "$OCDEV_TOPLEVEL/images/dockerregistry/config.yml" ./
     printf >./Dockerfile "%s\n" \
         'FROM openshift/origin-docker-registry:latest' \
         'USER 0' \
         'COPY dockerregistry /openshift/bin/' \
-        'RUN ln -sf /openshift/bin/dockerregistry /usr/bin/' \
+        'COPY config.yml /openshift/images/dockerregistry/' \
+        'RUN ln -sf /openshift/bin/dockerregistry /usr/bin/ && \' \
+        '    ln -sf /openshift/images/dockerregistry/config.yml /' \
         'USER 1001'
 }
 
