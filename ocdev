@@ -182,9 +182,9 @@ export -f ocdevutil-build-image
 
 # }}}
 
-# {{{ ocdevhelper
+# {{{ .ocdev
 
-ocdevhelper-bash-completion() {
+.ocdev-bash-completion() {
     cat <<'END'
 _ocdev()
 {
@@ -196,22 +196,31 @@ complete -o bashdefault -o default -F _ocdev ocdev
 END
 }
 
-ocdevhelper-oc() {
+# Typical usage:
+#
+#     alias oc="ocdev oc"
+#
+# This command is made as a helper, because it should not change the working
+# directory. Otherwise it will break relative paths:
+#
+#     oc create -f ./file.yaml
+#
+.ocdev-oc() {
     ocdevutil-init
     oc "$@"
 }
 
-ocdevhelper-ocdefault() {
+.ocdev-ocdefault() {
     ocdevutil-init
     ocdefault "$@"
 }
 
-ocdevhelper-oadm() {
+.ocdev-oadm() {
     ocdevutil-init
     oadm "$@"
 }
 
-ocdevhelper-exec() {
+.ocdev-exec() {
     ocdevutil-init
 
     # hide internals (ocdev-show-toplevel, usage, etc),
@@ -342,4 +351,4 @@ ocdev-start-router() {
     oadm router
 }
 
-ocdevutil-main "ocdevhelper-" "ocdev-" "$@"
+ocdevutil-main ".ocdev-" "ocdev-" "$@"

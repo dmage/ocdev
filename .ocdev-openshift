@@ -158,4 +158,4 @@ ocdevopenshift-destroy() {
     sudo rm -rf "$OCDEV_VARDIR"
 }
 
-ocdevutil-main "ocdevopenshifthelper-" "ocdevopenshift-" "$@"
+ocdevutil-main ".ocdevopenshift-" "ocdevopenshift-" "$@"

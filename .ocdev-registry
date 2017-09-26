@@ -254,4 +254,4 @@ ocdevregistry-login-docker() {
     docker login -u "$U" -p "$P" 172.30.1.1:5000
 }
 
-ocdevutil-main "ocdevregistryhelper-" "ocdevregistry-" "$@"
+ocdevutil-main ".ocdevregistry-" "ocdevregistry-" "$@"

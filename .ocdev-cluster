@@ -34,4 +34,4 @@ ocdevcluster-down() {
     ocdev openshift down
 }
 
-ocdevutil-main "ocdevclusterhelper-" "ocdevcluster-" "$@"
+ocdevutil-main ".ocdevcluster-" "ocdevcluster-" "$@"
