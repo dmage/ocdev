@@ -9,11 +9,13 @@ usage() {
 }
 
 ocdevcluster-build() {
+    ocdev build cmd/oc
     ocdev openshift build
     ocdev registry build
 }
 
 ocdevcluster-build-image() {
+    ocdev build cmd/oc
     ocdev openshift build-image
     ocdev pod build-image
     ocdev registry build-image

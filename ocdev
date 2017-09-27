@@ -31,7 +31,6 @@ usage() {
     echo "  create-defaults     Create the user 'developer', the project 'myproject', and default imagestreams"
     echo
     echo "Usage examples:"
-    echo "  ./hack/build-go.sh cmd/oc"
     echo "  ocdev cluster build"
     echo "  ocdev openshift start --loglevel=4"
     echo "  ocdev registry up"
@@ -331,10 +330,12 @@ ocdev-godoc() {
 }
 
 ocdev-test-end-to-end() {
+    rm -rf ./_output/scripts/test-end-to-end/
+
     findmnt -lo TARGET | grep ^/tmp/openshift/ | xargs -r sudo umount
     sudo rm -rf /tmp/openshift /var/lib/origin/openshift.local.pv/registry
 
-    for i in docker-builder deployer keepalived-ipfailover haproxy-router; do
+    for i in docker-builder sti-builder deployer keepalived-ipfailover haproxy-router; do
         docker pull openshift/origin-$i:latest
     done
     ocdev cluster build-image
