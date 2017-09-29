@@ -90,7 +90,7 @@ ocdevopenshift-up() {
         docker run --rm --net=host --hostname="$hostname" \
             -v "$configdir:/ocdev/docker/config" \
             -v "$OCDEV_DOCKER_BINDIR:/openshift/bin" \
-            ocdev-origin start --write-config=/ocdev/docker/config \
+            openshift/origin start --write-config=/ocdev/docker/config \
             --images='openshift/origin-${component}:latest' \
             --public-master="$public"
         if [ ! -r "$configdir/master/admin.kubeconfig" ]; then
@@ -125,7 +125,7 @@ ocdevopenshift-up() {
         -v "/dev:/dev:ro" \
         -v "/openshift.local.volumes:/openshift.local.volumes:rw,rslave" \
         $dockeropts \
-        ocdev-origin start \
+        openshift/origin start \
         --master-config="/ocdev/docker/config/master/master-config.yaml" \
         --node-config="/ocdev/docker/config/node-$hostname/node-config.yaml" \
         "$@"
