@@ -259,7 +259,7 @@ ocdev-docker-build() {
 }
 
 ocdev-login-as-developer() {
-    oc login -u developer
+    oc login -u developer -p developer
 }
 
 ocdev-login-as-pruner() {
