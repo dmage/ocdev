@@ -114,16 +114,31 @@ ocdevutil-main() {
         exit
     fi
 
-    if [ "$1" == "commands" ]; then
+    case "$1" in
+    commands)
         if [ $# -eq 1 ]; then
             echo "commands"
             ocdevutil-commands "$helperprefix" "$prefix"
-        elif type "$helperprefix$2" >/dev/null 2>&1; then
-            local helper="$helperprefix$2"; shift 2
+        elif type -f "$helperprefix$2" >/dev/null 2>&1; then
+            export OCDEV_PROGNAME="${OCDEV_PROGNAME-}${OCDEV_PROGNAME:+ }$2"
+            local helper="$helperprefix$2"
+            shift 2
             "$helper" commands "$@"
         fi
         exit
-    fi
+        ;;
+    help)
+        if [ $# -eq 1 ]; then
+            usage
+        elif type -f "$helperprefix$2" >/dev/null 2>&1; then
+            export OCDEV_PROGNAME="${OCDEV_PROGNAME-}${OCDEV_PROGNAME:+ }$2"
+            local helper="$helperprefix$2"
+            shift 2
+            "$helper" help "$@"
+        fi
+        exit
+        ;;
+    esac
 
     ocdevutil-init
     cd "$OCDEV_TOPLEVEL"
