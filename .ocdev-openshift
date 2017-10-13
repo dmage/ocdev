@@ -6,12 +6,15 @@ usage() {
     echo "Available commands:"
     echo "  build            Build openshift binary"
     echo "  docker-build     Cross-compile openshift binary for Docker"
-    echo "  build-image      "
     echo "  start            Start the all-in-one OpenShift server in the foreground"
-    echo "  up               "
-    echo "  down             "
     echo "  create-defaults  Create the user 'developer', the project 'myproject', and default imagestreams"
     echo "  destroy          Remove generated config files, etcd data, volumes, etc"
+    echo
+    echo "OpenShift in Docker:"
+    echo "  build-image      "
+    echo "  up               "
+    echo "  down             "
+    echo "  logs             "
 }
 
 ocdevopenshift-build() {
@@ -54,22 +57,36 @@ ocdevopenshift-start() {
             --images='openshift/origin-${component}:latest' \
             --etcd-dir="$etcddir" \
             --volume-dir="$volumedir"
-        sudo chmod +r "$configdir/master/admin.kubeconfig"
+        if [ ! -r "$configdir/master/admin.kubeconfig" ]; then
+            sudo chmod +r "$configdir/master/admin.kubeconfig"
+        fi
     fi
     cp "$configdir/master/admin.kubeconfig" "$HOME/.kube/config"
 
     sudo -E "$openshift" start \
         --master-config="$configdir/master/master-config.yaml" \
-        --node-config="$configdir/node-$(hostname)/node-config.yaml" \
+        --node-config="$configdir/node-$hostname/node-config.yaml" \
         "$@"
+}
+
+is_docker_for_mac() {
+    ifconfig bridge100 >/dev/null 2>&1
 }
 
 ocdevopenshift-up() {
     ocdevutil-docker-init
 
-    local configdir="$OCDEV_VARDIR/docker/config"
-    local etcddir="$OCDEV_VARDIR/docker/etcd"
-    local volumedir="$OCDEV_VARDIR/docker/volumes"
+    local is_docker_for_mac=
+    if is_docker_for_mac; then is_docker_for_mac=1; fi
+
+    local configdir="$OCDEV_VARDIR/in-docker/config"
+    local etcddir="$OCDEV_VARDIR/in-docker/etcd"
+    local volumedir="$OCDEV_VARDIR/in-docker/volumes"
+    local logpodsdir="$OCDEV_VARDIR/in-docker/log-pods"
+    if [ -n "$is_docker_for_mac" ]; then
+        etcddir="/ocdev/etcd"
+        volumedir="/ocdev/volumes"
+    fi
 
     [ -z "$(docker ps -aqf name='^/origin$')" ] || docker rm origin >/dev/null
 
@@ -79,8 +96,7 @@ ocdevopenshift-up() {
     local public
     if [ ! -e "$configdir/master" -o ! -e "$configdir/node-$hostname" ]; then
         local publicip
-        if ifconfig bridge100 >/dev/null 2>&1; then
-            # Docker for Mac
+        if [ -n "$is_docker_for_mac" ]; then
             publicip=$(docker run --rm --net=host busybox sh -c 'ip -o -4 addr show eth1 | awk -F"[ /]+" "{print\$4}"')
         else
             publicip=127.0.0.1
@@ -88,47 +104,57 @@ ocdevopenshift-up() {
         public="https://$publicip:8443"
 
         docker run --rm --net=host --hostname="$hostname" \
-            -v "$configdir:/ocdev/docker/config" \
+            -v "$configdir:$configdir" \
+            -v "$etcddir:$etcddir" \
+            -v "$volumedir:$volumedir" \
             -v "$OCDEV_DOCKER_BINDIR:/openshift/bin" \
-            openshift/origin start --write-config=/ocdev/docker/config \
+            openshift/origin start --write-config="$configdir" \
             --images='openshift/origin-${component}:latest' \
+            --etcd-dir="$etcddir" \
+            --volume-dir="$volumedir" \
             --public-master="$public"
         if [ ! -r "$configdir/master/admin.kubeconfig" ]; then
             sudo chmod +r "$configdir/master/admin.kubeconfig"
         fi
-        if ifconfig bridge100 >/dev/null 2>&1; then
+        if [ -n "$is_docker_for_mac" ]; then
             sed -i.bak -e "s,^\(current-context:\).*,\1 default/${publicip//./-}:8443/system:admin," "$configdir/master/admin.kubeconfig"
         fi
     else
-        public=$(grep ^masterPublicURL: ~/.ocdev/docker/config/master/master-config.yaml | sed -e 's/^[^:]*: *//')
+        public=$(grep ^masterPublicURL: "$configdir/master/master-config.yaml" | sed -e 's/^[^:]*: *//')
     fi
     cp "$configdir/master/admin.kubeconfig" "$HOME/.kube/config"
 
     local dockeropts=""
 
-    local cgroupdriver=$(docker info | grep '^Cgroup Driver:' | sed -e 's/^[^:]*: *//')
+    local cgroupdriver=$(docker info | sed -ne '/^Cgroup Driver:/ { s/^[^:]*: *//p; }')
     case "$cgroupdriver" in
     systemd)
         dockeropts="$dockeropts -v /var/run:/var/run:rw"
         dockeropts="$dockeropts -v /sys/fs/cgroup:/sys/fs/cgroup:rw"
     esac
 
-    docker run --rm --privileged --pid=host -v /:/rootfs busybox nsenter --mount=/rootfs/proc/1/ns/mnt -- mount --make-rshared /
-    docker run --rm -v /:/rootfs:rw busybox sh -c 'V=/rootfs/openshift.local.volumes; rm -rf $V && mkdir -p $V'
+    local dockerrootdir=$(docker info | sed -ne '/^Docker Root Dir:/ { s/^[^:]*: *//p; }')
+
+    if [ -n "$is_docker_for_mac" ]; then
+        docker run --rm --privileged --pid=host -v /:/rootfs busybox nsenter --mount=/rootfs/proc/1/ns/mnt -- mount --make-rshared /
+    fi
     docker run -d --name=origin --privileged --net=host --hostname="$hostname" --pid=host \
-        -v "$configdir:/ocdev/docker/config" \
+        -v "$configdir:$configdir" \
+        -v "$etcddir:$etcddir" \
+        -v "$volumedir:$volumedir:rw,rslave" \
         -v "$OCDEV_DOCKER_BINDIR:/openshift/bin" \
-        -v "/var/run/docker.sock:/var/run/docker.sock" \
         -v "/:/rootfs:ro,slave" \
-        -v "/sys:/sys:ro" \
-        -v "/var/lib/docker/:/var/lib/docker:rw" \
-        -v "/dev:/dev:ro" \
-        -v "/openshift.local.volumes:/openshift.local.volumes:rw,rslave" \
+        -v "/var/run/docker.sock:/var/run/docker.sock" \
+        -v "/var/lib/docker:/var/lib/docker:rw" \
+        -v "/var/log/pods:/var/log/pods:rw" \
+        -v "$dockerrootdir:$dockerrootdir:rw" \
         $dockeropts \
         openshift/origin start \
-        --master-config="/ocdev/docker/config/master/master-config.yaml" \
-        --node-config="/ocdev/docker/config/node-$hostname/node-config.yaml" \
+        --master-config="$configdir/master/master-config.yaml" \
+        --node-config="$configdir/node-$hostname/node-config.yaml" \
         "$@"
+        #-v "/dev:/dev:ro" \
+        #-v "/sys:/sys:ro" \
 
     echo
     printf "%s\n" "$public"
@@ -154,7 +180,12 @@ ocdevopenshift-anonymous-debug() {
 }
 
 ocdevopenshift-destroy() {
+    docker kill origin || true
     mount | grep -F "$OCDEV_VARDIR/openshift.local.volumes" | cut -d' ' -f3 | xargs -r sudo umount
+    mount | grep -F "$OCDEV_VARDIR/in-docker/volumes" | cut -d' ' -f3 | xargs -r sudo umount
+    if is_docker_for_mac; then
+        docker run --rm -v /:/rootfs:rw busybox sh -c 'V=/rootfs/ocdev/volumes; rm -rf $V && mkdir -p $V'
+    fi
     sudo rm -rf "$OCDEV_VARDIR"
 }
 
