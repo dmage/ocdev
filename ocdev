@@ -118,6 +118,7 @@ ocdevutil-main() {
     commands)
         if [ $# -eq 1 ]; then
             echo "commands"
+            echo "help"
             ocdevutil-commands "$helperprefix" "$prefix"
         elif type -f "$helperprefix$2" >/dev/null 2>&1; then
             export OCDEV_PROGNAME="${OCDEV_PROGNAME-}${OCDEV_PROGNAME:+ }$2"
