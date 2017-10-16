@@ -190,7 +190,7 @@ ocdevregistry-use-minio() {
         -e MINIO_ACCESS_KEY="$access" \
         -e MINIO_SECRET_KEY="$secret" \
         -p 127.0.0.1:9000:9000 \
-        minio/minio server /data
+        minio/minio:edge server /data
     minioip=$(docker inspect minio -f "{{.NetworkSettings.IPAddress}}")
     for i in {1..20}; do
         curl -s "http://127.0.0.1:9000" >/dev/null && break || sleep 0.1
