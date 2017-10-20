@@ -4,8 +4,12 @@ usage() {
     echo "usage: $OCDEV_PROGNAME <command>"
     echo
     echo "Available commands:"
-    echo "  generate-config"
-    echo "  deploy"
+    echo "  generate-config  Generate configuration for Prometheus"
+    echo "  deploy           Deploy the Prometheus"
+    echo
+    echo "Example:"
+    echo "  ocdev prometheus generate-config >prometheus.yml"
+    echo "  ocdev prometheus deploy prometheus.yml"
 }
 
 ocdevprometheus-generate-config() {

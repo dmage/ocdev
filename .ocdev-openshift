@@ -9,12 +9,13 @@ usage() {
     echo "  start            Start the all-in-one OpenShift server in the foreground"
     echo "  create-defaults  Create the user 'developer', the project 'myproject', and default imagestreams"
     echo "  destroy          Remove generated config files, etcd data, volumes, etc"
+    echo "  anonymous-debug  Disable authorization for /debug/pprof endpoints"
     echo
     echo "OpenShift in Docker:"
-    echo "  build-image      "
-    echo "  up               "
-    echo "  down             "
-    echo "  logs             "
+    echo "  build-image      Build the openshift/origin:latest Docker image"
+    echo "  up               Start the OpenShift server in Docker"
+    echo "  down             Stop the OpenShift server in Docker"
+    echo "  logs             Fetch the logs of OpenShift"
 }
 
 ocdevopenshift-build() {

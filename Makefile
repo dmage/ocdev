@@ -2,7 +2,7 @@ OCDEV=ocdev
 
 all: test
 
-test: check-docs
+test check: check-docs
 
 .PHONY: check-docs
 check-docs:

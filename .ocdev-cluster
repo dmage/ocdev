@@ -4,8 +4,10 @@ usage() {
     echo "usage: $OCDEV_PROGNAME <command>"
     echo
     echo "Available commands:"
-    echo "  build-image  Build Docker images"
-    echo "  up           "
+    echo "  build        Build oc, openshift, pod and registry binaries"
+    echo "  build-image  Build oc and Docker images"
+    echo "  up           Start the cluster in Docker"
+    echo "  down         Stop the cluster in Docker"
 }
 
 ocdevcluster-build() {
