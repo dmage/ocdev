@@ -301,6 +301,14 @@ ocdevregistry-generate-garbage() {
     docker push 172.30.1.1:5000/myproject/busybox-glibc
     oc delete is/busybox-glibc
     ocdefault delete image $(ocdefault get images | grep -F /myproject/busybox-glibc@ | cut -d' ' -f1)
+    docker tag busybox 172.30.1.1:5000/myproject/busybox-empty
+    docker push 172.30.1.1:5000/myproject/busybox-empty
+    oc delete istag/busybox-empty:latest
+}
+
+ocdevregistry-hard-prune() {
+    oadm policy add-cluster-role-to-user system:image-pruner system:serviceaccount:default:registry
+    ocdefault rsh dc/docker-registry env REGISTRY_LOG_LEVEL=debug /usr/bin/dockerregistry -prune=delete
 }
 
 ocdevregistry-login-docker() {
