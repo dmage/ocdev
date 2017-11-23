@@ -83,7 +83,6 @@ ocdevopenshift-up() {
     local configdir="$OCDEV_VARDIR/in-docker/config"
     local etcddir="$OCDEV_VARDIR/in-docker/etcd"
     local volumedir="$OCDEV_VARDIR/in-docker/volumes"
-    local logpodsdir="$OCDEV_VARDIR/in-docker/log-pods"
     if [ -n "$is_docker_for_mac" ]; then
         etcddir="/ocdev/etcd"
         volumedir="/ocdev/volumes"
@@ -100,7 +99,7 @@ ocdevopenshift-up() {
         if [ -n "$is_docker_for_mac" ]; then
             publicip=$(docker run --rm --net=host busybox sh -c 'ip -o -4 addr show eth1 | awk -F"[ /]+" "{print\$4}"')
         else
-            publicip=127.0.0.1
+            publicip=$(openshift start --print-ip)
         fi
         public="https://$publicip:8443"
 
@@ -154,8 +153,6 @@ ocdevopenshift-up() {
         --master-config="$configdir/master/master-config.yaml" \
         --node-config="$configdir/node-$hostname/node-config.yaml" \
         "$@"
-        #-v "/dev:/dev:ro" \
-        #-v "/sys:/sys:ro" \
 
     echo
     printf "%s\n" "$public"
