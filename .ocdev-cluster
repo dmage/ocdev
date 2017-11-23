@@ -38,4 +38,9 @@ ocdevcluster-down() {
     ocdev openshift down
 }
 
+ocdevcluster-destroy() {
+    ocdev openshift down
+    ocdev openshift destroy
+}
+
 ocdevutil-main ".ocdevcluster-" "ocdevcluster-" "$@"
