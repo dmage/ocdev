@@ -158,7 +158,7 @@ export -f ocdevutil-main
 
 ocdevutil-remove-image() {
     if docker images -q "$1" | grep . >/dev/null; then
-        docker rmi "$1"
+        docker rmi -f "$1"
     fi
 }
 export -f ocdevutil-remove-image
