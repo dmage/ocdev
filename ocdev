@@ -102,7 +102,8 @@ ocdevutil-init() {
     arch=$(go env GOHOSTARCH)
     for name in ORIGIN IMAGEREGISTRY; do
         eval 'pkg="$OCDEV_'$name'_PACKAGE"'
-        if dir=$(pkgdir "$OCDEV_ORIGIN_PACKAGE"); then
+        if dir=$(pkgdir "$pkg"); then
+            eval 'export OCDEV_'$name'_TOPLEVEL=$dir'
             eval 'export OCDEV_'$name'_BINDIR=$dir/_output/local/bin/$os/$arch'
             eval 'export PATH="$OCDEV_'$name'_BINDIR:$PATH"'
         fi
@@ -115,7 +116,13 @@ ocdevutil-docker-init() {
     [ -n "${OCDEV_DOCKER_GOARCH-}" ] || OCDEV_DOCKER_GOARCH=$(docker run --rm "$OCDEV_GOLANG_IMAGE" go env GOARCH)
     export OCDEV_DOCKER_GOOS OCDEV_DOCKER_GOARCH
 
-    export OCDEV_DOCKER_BINDIR="$PWD/_output/local/bin/$OCDEV_DOCKER_GOOS/$OCDEV_DOCKER_GOARCH"
+    local name pkg dir
+    for name in ORIGIN IMAGEREGISTRY; do
+        eval 'pkg="$OCDEV_'$name'_PACKAGE"'
+        if dir=$(pkgdir "$pkg"); then
+            eval 'export OCDEV_'$name'_DOCKER_BINDIR=$dir/_output/local/bin/$OCDEV_DOCKER_GOOS/$OCDEV_DOCKER_GOARCH'
+        fi
+    done
 }
 export -f ocdevutil-docker-init
 

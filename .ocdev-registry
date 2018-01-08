@@ -40,8 +40,8 @@ ocdevregistry-docker-build() {
 }
 
 origin_docker_registry_image() {
-    cp "$OCDEV_DOCKER_BINDIR/dockerregistry" ./
-    cp "$OCDEV_TOPLEVEL/images/dockerregistry/config.yml" ./
+    cp "$OCDEV_IMAGEREGISTRY_DOCKER_BINDIR/dockerregistry" ./
+    cp "$OCDEV_IMAGEREGISTRY_TOPLEVEL/images/dockerregistry/config.yml" ./
     printf >./Dockerfile "%s\n" \
         'FROM openshift/origin-docker-registry:latest' \
         'USER 0' \

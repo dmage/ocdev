@@ -29,7 +29,7 @@ ocdevopenshift-docker-build() {
 }
 
 origin_image() {
-    cp "$OCDEV_DOCKER_BINDIR/openshift" ./openshift
+    cp "$OCDEV_ORIGIN_DOCKER_BINDIR/openshift" ./openshift
     printf >./Dockerfile "%s\n" \
         'FROM openshift/origin:latest' \
         'COPY openshift /openshift/bin/openshift' \
@@ -109,7 +109,7 @@ ocdevopenshift-up() {
             -v "$configdir:$configdir" \
             -v "$etcddir:$etcddir" \
             -v "$volumedir:$volumedir" \
-            -v "$OCDEV_DOCKER_BINDIR:/openshift/bin" \
+            -v "$OCDEV_ORIGIN_DOCKER_BINDIR:/openshift/bin" \
             openshift/origin start --write-config="$configdir" \
             --images='openshift/origin-${component}:latest' \
             --etcd-dir="$etcddir" \
@@ -144,7 +144,7 @@ ocdevopenshift-up() {
         -v "$configdir:$configdir" \
         -v "$etcddir:$etcddir" \
         -v "$volumedir:$volumedir:rw,rslave" \
-        -v "$OCDEV_DOCKER_BINDIR:/openshift/bin" \
+        -v "$OCDEV_ORIGIN_DOCKER_BINDIR:/openshift/bin" \
         -v "/:/rootfs:ro,slave" \
         -v "/var/run/docker.sock:/var/run/docker.sock" \
         -v "/var/lib/docker:/var/lib/docker:rw" \
