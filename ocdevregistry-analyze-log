@@ -152,7 +152,7 @@ while (my ($http_request_id, $records) = each(%$requests)) {
     my @problems;
 
     my $duration = get_duration($request);
-    if ($duration >= 1) {
+    if ($duration >= 10) {
         push(@problems, "duration: ${duration}s");
     }
 
@@ -185,14 +185,14 @@ while (my ($http_request_id, $records) = each(%$requests)) {
     }
 
     if (@problems) {
-        print "\n# $http_request_id\n";
+        print "\nREQUEST $http_request_id\n";
         print "\n";
         foreach my $key (qw(http_request_method http_request_uri openshift_auth_user openshift_auth_userid vars_name vars_reference vars_digest)) {
             print "  - $key = $request->{$key}\n" if $request->{$key};
         }
         print "\n";
         foreach my $problem (@problems) {
-            print "  - $problem\n";
+            print "  - problem: $problem\n";
         }
         print "\n";
         foreach my $record (@$records) {
