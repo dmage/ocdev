@@ -1,0 +1,202 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+use Time::Local qw(timegm);
+
+my $requests = {};
+
+sub logrus_line {
+    my ($line) = @_;
+    my $orig_line = $line;
+    my $record = {};
+    while ($line =~ s/^([A-Za-z0-9_.]+)=("(?:\\.|[^"])*"|[^ ]*)(?: |$)//) {
+        my ($k, $v) = ($1, $2);
+        $v = $1 if $v =~ /^"(.*)"$/;
+        $record->{$k} = $v;
+    }
+    if ($line ne "") {
+        die "unable to parse logrus input; suffix: [$line]";
+    }
+    my $http_request_id = $record->{"http.request.id"};
+    if (!$http_request_id) {
+        if ($orig_line !~ m/getImage: got image|getImageStream: got image stream|getImageStream: returning cached copy|as Docker Registry URL/) {
+            #print "$orig_line\n";
+        }
+        return;
+    }
+    push(@{$requests->{$http_request_id} //= []}, $record);
+}
+
+sub access_line {
+    my ($line) = @_;
+    chomp($line);
+    my $w = qr/(?:[^ ]+|"(?:\\.|[^"])*")/;
+    my $date = qr/\[[^]]+\]/;
+    if (my ($ip, $a, $b, $date, $uri, $status_code, $c, $d, $user_agent) = ($line =~ /^($w) ($w) ($w) ($date) ($w) ($w) ($w) ($w) ($w)$/)) {
+        if ($uri eq '"GET /v2/ HTTP/1.1"' && $status_code == 401) {
+            return;
+        }
+        if ($status_code >= 400) {
+            #print "$line\n";
+        }
+    } else {
+        die "unable to parse access line: [$line]";
+    }
+}
+
+sub glog_line {
+    my ($line) = @_;
+    if ($line =~ /http: TLS handshake error from/) {
+    } else {
+        print "$line\n";
+    }
+}
+
+while (<>) {
+    if (/(time=.*$)/) {
+        logrus_line($1);
+    } elsif (/^[0-9.]* - - \[[^]]*\]/) {
+        access_line($_);
+    } elsif (/^[I][0-9]{4} /) {
+        glog_line($_);
+    } else {
+        print $_;
+    }
+}
+
+sub get_common_field {
+    my ($name, $records) = @_;
+    my $value;
+    foreach my $record (@$records) {
+        if (defined $record->{$name}) {
+            if (defined $value) {
+                die "unable to get common field: found at least two values for $name: [$value] and [$record->{$name}]" if $record->{$name} ne $value;
+            } else {
+                $value = $record->{$name};
+            }
+            delete $record->{$name};
+        }
+    }
+    return $value;
+}
+
+sub make_request {
+    my ($records) = @_;
+    my $request = {
+        go_version => get_common_field("go.version", $records),
+        instance_id => get_common_field("instance.id", $records),
+        http_request_id => get_common_field("http.request.id", $records),
+        http_request_method => get_common_field("http.request.method", $records),
+        http_request_uri => get_common_field("http.request.uri", $records),
+        http_request_host => get_common_field("http.request.host", $records),
+        http_request_useragent => get_common_field("http.request.useragent", $records),
+        http_request_remoteaddr => get_common_field("http.request.remoteaddr", $records),
+        openshift_logger => get_common_field("openshift.logger", $records),
+        openshift_auth_user => get_common_field("openshift.auth.user", $records),
+        openshift_auth_userid => get_common_field("openshift.auth.userid", $records),
+        vars_name => get_common_field("vars.name", $records),
+        vars_reference => get_common_field("vars.reference", $records),
+        vars_digest => get_common_field("vars.digest", $records),
+        records => $records,
+    };
+}
+
+sub parse_timestamp {
+    my ($s) = @_;
+    my $xx = qr/([0-9][0-9])/;
+    if ($s =~ /^([0-9]{4})-${xx}-${xx}T${xx}:${xx}:${xx}\.([0-9]+)Z$/) {
+        my ($year, $month, $day, $hh, $mm, $ss, $frac) = ($1, $2, $3, $4, $5, $6, $7);
+        my $ts = timegm($ss, $mm, $hh, $day, $month, $year);
+        return "$ts.$frac"+0.0;
+    } else {
+        die "unable to parse time [$s]";
+    }
+}
+
+sub get_timestamp {
+    my ($record) = @_;
+    return parse_timestamp($record->{time});
+}
+
+sub get_duration {
+    my ($request) = @_;
+    my $first_record = $request->{records}->[0];
+    my $last_record = $request->{records}->[-1];
+    return get_timestamp($last_record) - get_timestamp($first_record);
+}
+
+sub get_status_record {
+    my ($request) = @_;
+    foreach my $record (@{$request->{records}}) {
+        if (defined $record->{"http.response.status"}) {
+            return $record;
+        }
+    }
+    return;
+}
+
+sub format_record {
+    my ($record) = @_;
+    my $s = "time=\"$record->{time}\" level=\"$record->{level}\" msg=\"$record->{msg}\"";
+    foreach my $key (sort keys %$record) {
+        next if $key =~ /^(?:time|level|msg)$/;
+        $s .= " $key=\"$record->{$key}\"";
+    }
+    return $s;
+}
+
+while (my ($http_request_id, $records) = each(%$requests)) {
+    my $request = make_request($records);
+
+    my @problems;
+
+    my $duration = get_duration($request);
+    if ($duration >= 1) {
+        push(@problems, "duration: ${duration}s");
+    }
+
+    if (my $status = get_status_record($request)) {
+        my $status_code = $status->{"http.response.status"};
+        if ($status_code >= 400) {
+            my $head_blob = ($request->{http_request_method} eq "HEAD" && $request->{http_request_uri} =~ m"/blobs/");
+            my $get_manifest = ($request->{http_request_method} eq "GET" && $request->{http_request_uri} =~ m"/manifests/");
+
+            if ($status_code == 404 && ($head_blob || $get_manifest)) {
+                # ok
+            } else {
+                push(@problems, "status code: $status_code");
+            }
+        }
+    } else {
+        if ($request->{records}->[-1]->{msg} eq "error authorizing context: authorization header required") {
+            if ($request->{http_request_method} eq "GET" && $request->{http_request_uri} eq "/v2/") {
+                # just a regular GET /v2/ check
+            } else {
+                push(@problems, "no authorization header");
+            }
+        } elsif ($request->{records}->[-1]->{msg} eq "anonymous token request") {
+            # it's suspicious, but it might happen
+        } elsif ($request->{records}->[-1]->{msg} =~ /^error authorizing context: access denied$|^invalid token:/) {
+            push(@problems, "access denied");
+        } else {
+            push(@problems, "still in progress");
+        }
+    }
+
+    if (@problems) {
+        print "\n# $http_request_id\n";
+        print "\n";
+        foreach my $key (qw(http_request_method http_request_uri openshift_auth_user openshift_auth_userid vars_name vars_reference vars_digest)) {
+            print "  - $key = $request->{$key}\n" if $request->{$key};
+        }
+        print "\n";
+        foreach my $problem (@problems) {
+            print "  - $problem\n";
+        }
+        print "\n";
+        foreach my $record (@$records) {
+            print "    ".format_record($record)."\n";
+        }
+    }
+}
