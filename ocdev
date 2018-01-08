@@ -380,9 +380,13 @@ ocdev-test-end-to-end() {
     done
     ocdev cluster build-image
 
-    docker images --filter "reference=openshift/origin*:latest" --format="{{.Repository}}" | xargs -r -I {} docker tag {}:latest {}:local-end-to-end
+    docker images --format="{{.Repository}}:{{.Tag}}" |
+        sed -n -s 's,^\(\(docker.io/\)\?openshift/origin.*\):latest,\1,p' |
+        xargs -r -I {} docker tag {}:latest {}:local-end-to-end
     USE_IMAGES='openshift/origin-${component}:local-end-to-end' TAG=local-end-to-end ./hack/test-end-to-end.sh
-    docker images --filter "reference=openshift/origin*:local-end-to-end" --format="{{.Repository}}:{{.Tag}}" | xargs -r docker rmi
+    docker images --format="{{.Repository}}:{{.Tag}}" |
+        grep ':local-end-to-end$' |
+        xargs -r docker rmi
 }
 
 # }}}
