@@ -19,10 +19,12 @@ usage() {
 }
 
 ocdevopenshift-build() {
+    cdpkg "$OCDEV_ORIGIN_PACKAGE"
     ocdev build cmd/openshift
 }
 
 ocdevopenshift-docker-build() {
+    cdpkg "$OCDEV_ORIGIN_PACKAGE"
     ocdev docker-build cmd/openshift
 }
 
@@ -168,6 +170,7 @@ ocdevopenshift-logs() {
 }
 
 ocdevopenshift-create-defaults() {
+    cdpkg "$OCDEV_ORIGIN_PACKAGE"
     oc login -u developer -p developer
     oc new-project myproject
     ocdefault -n openshift create -f ./examples/image-streams/image-streams-centos7.json

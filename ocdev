@@ -4,6 +4,8 @@ set -efu
 
 export OCDEV_VARDIR=${OCDEV_VARDIR:-$HOME/.ocdev}
 export OCDEV_GOLANG_IMAGE=${OCDEV_GOLANG_IMAGE:-golang:1.8}
+export OCDEV_ORIGIN_PACKAGE=github.com/openshift/origin
+export OCDEV_IMAGEREGISTRY_PACKAGE=github.com/openshift/image-registry
 OCDEV_PROGNAME=$(basename "$0")
 
 usage() {
@@ -53,8 +55,26 @@ fatal() {
 }
 export -f fatal
 
+pkgdir() {
+    local dir=$(go list -e -f '{{.Dir}}' "$1")
+    if [ -z "$dir" ]; then
+        return 1
+    fi
+    printf "%s\n" "$dir"
+}
+export -f pkgdir
+
+cdpkg() {
+    local dir
+    if ! dir=$(pkgdir "$1"); then
+        fatal "unable to find package $1"
+    fi
+    cd "$dir"
+}
+export -f cdpkg
+
 ocdefault() {
-    oc --context=$(kubectl config current-context | sed -e 's,^[^/]*,default,' -e 's,[^/]*$,system:admin,') "$@"
+    oc --context=$(oc config current-context | sed -e 's,^[^/]*,default,' -e 's,[^/]*$,system:admin,') "$@"
 }
 export -f ocdefault
 
@@ -77,20 +97,16 @@ ocdevutil-commands() {
 export -f ocdevutil-commands
 
 ocdevutil-init() {
-    local err=0
-    OCDEV_TOPLEVEL=$(git rev-parse --show-toplevel) || err=$?
-    if [ "$err" -ne 0 ]; then
-        echo
-        echo "You are expected to run $OCDEV_PROGNAME from OpenShift's git repository."
-        exit "$err"
-    fi
-
-    export OCDEV_BINDIR="$OCDEV_TOPLEVEL/_output/local/bin/$(go env GOOS)/$(go env GOARCH)"
-
-    local oc=$(which oc 2>/dev/null)
-    if [ "$oc" != "$OCDEV_BINDIR/oc" ]; then
-        export PATH="$OCDEV_BINDIR:$PATH"
-    fi
+    local name pkg dir os arch
+    os=$(go env GOHOSTOS)
+    arch=$(go env GOHOSTARCH)
+    for name in ORIGIN IMAGEREGISTRY; do
+        eval 'pkg="$OCDEV_'$name'_PACKAGE"'
+        if dir=$(pkgdir "$OCDEV_ORIGIN_PACKAGE"); then
+            eval 'export OCDEV_'$name'_BINDIR=$dir/_output/local/bin/$os/$arch'
+            eval 'export PATH="$OCDEV_'$name'_BINDIR:$PATH"'
+        fi
+    done
 }
 export -f ocdevutil-init
 
@@ -144,7 +160,6 @@ ocdevutil-main() {
     esac
 
     ocdevutil-init
-    cd "$OCDEV_TOPLEVEL"
 
     if type "$prefix$1" >/dev/null 2>&1; then
         export OCDEV_PROGNAME="${OCDEV_PROGNAME-}${OCDEV_PROGNAME:+ }$1"
@@ -317,28 +332,28 @@ ocdev-godoc() {
         fi
     }
 
-    local origin
-    origin=$(go list -f "{{.Dir}}" github.com/openshift/origin)
+    local pkg
+    pkg=$(go list -e -f "{{.ImportPath}}" .)
 
     _TMP=$(mktemp -d "${TMPDIR:-/tmp}"/ocdev-godoc.XXXXXXXX)
     cleanup() {
         trap - EXIT
-        fuse_unmount "$_TMP/src/github.com/openshift/origin" || true
+        fuse_unmount "$_TMP/src/$pkg" || true
         rm -rf "$_TMP"
         exit "$1"
     }
     trap 'cleanup $?' EXIT
     trap 'cleanup 1' HUP PIPE INT QUIT TERM
 
-    mkdir -p "$_TMP/src/github.com/openshift/origin"
-    bindfs --no-allow-other "$origin" "$_TMP/src/github.com/openshift/origin"
+    mkdir -p "$_TMP/src/$pkg"
+    bindfs --no-allow-other "$PWD" "$_TMP/src/$pkg"
 
     {
         for i in 1 2 3 4 5 6 7 8 9 10; do
             curl -fs --max-time 1 "http://localhost:6060/" >/dev/null && break
             sleep 0.5
         done
-        open_url "http://localhost:6060/pkg/github.com/openshift/origin/"
+        open_url "http://localhost:6060/pkg/$pkg/"
     }&
     local err=0
     GOPATH="$_TMP" godoc -http=:6060 "$@" || err=$?

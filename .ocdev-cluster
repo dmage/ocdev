@@ -11,12 +11,14 @@ usage() {
 }
 
 ocdevcluster-build() {
+    cdpkg "$OCDEV_ORIGIN_PACKAGE"
     ocdev build cmd/oc
     ocdev openshift build
     ocdev registry build
 }
 
 ocdevcluster-build-image() {
+    cdpkg "$OCDEV_ORIGIN_PACKAGE"
     ocdev build cmd/oc
     ocdev openshift build-image
     ocdev pod build-image

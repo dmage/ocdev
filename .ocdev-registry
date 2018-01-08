@@ -30,10 +30,12 @@ usage() {
 }
 
 ocdevregistry-build() {
+    cdpkg "$OCDEV_IMAGEREGISTRY_PACKAGE"
     ocdev build cmd/dockerregistry
 }
 
 ocdevregistry-docker-build() {
+    cdpkg "$OCDEV_IMAGEREGISTRY_PACKAGE"
     ocdev docker-build cmd/dockerregistry
 }
 
@@ -63,11 +65,14 @@ ocdevregistry-test() {
 }
 
 ocdevregistry-test-extended() {
+    cdpkg "$OCDEV_ORIGIN_PACKAGE"
+
     # we want to have an up-to-date version of extended.test
-    rm -v "$OCDEV_BINDIR/extended.test" || true
+    rm -v "$OCDEV_ORIGIN_BINDIR/extended.test" || true
 
     # core.sh wants to have iptables in PATH
-    FOCUS="\[Feature:ImagePrune\]|\[Feature:ImageQuota\]|\[imageapis\]|\[registry\]" PATH="$PATH:/sbin" PRINT_TESTS=1 ./test/extended/core.sh
+    #FOCUS="\[Feature:ImagePrune\]|\[Feature:ImageQuota\]|\[imageapis\]|\[registry\]"
+    FOCUS="Image resource quota" PATH="$PATH:/sbin" ./test/extended/core.sh
 }
 
 ocdevregistry-up() {
