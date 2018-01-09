@@ -105,10 +105,15 @@ sub make_request {
 sub parse_timestamp {
     my ($s) = @_;
     my $xx = qr/([0-9][0-9])/;
-    if ($s =~ /^([0-9]{4})-${xx}-${xx}T${xx}:${xx}:${xx}\.([0-9]+)Z$/) {
-        my ($year, $month, $day, $hh, $mm, $ss, $frac) = ($1, $2, $3, $4, $5, $6, $7);
+    if ($s =~ /^([0-9]{4})-${xx}-${xx}T${xx}:${xx}:${xx}(?:\.([0-9]+))?(Z|[+-][0-9][0-9]:[0-9][0-9])$/) {
+        my ($year, $month, $day, $hh, $mm, $ss, $frac, $tz) = ($1, $2, $3, $4, $5, $6, $7, $8);
+        $frac //= 0;
         my $ts = timegm($ss, $mm, $hh, $day, $month - 1, $year);
-        return "$ts.$frac"+0.0;
+        $ts = "$ts.$frac"+0.0;
+        if ($tz =~ /^([+-][0-9][0-9]):([0-9][0-9])$/) {
+            $ts += $1*60+($1/abs($1))*$2;
+        }
+        return $ts;
     } else {
         die "unable to parse time [$s]";
     }
