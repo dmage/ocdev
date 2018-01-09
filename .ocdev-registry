@@ -77,7 +77,7 @@ ocdevregistry-test-extended() {
 
 ocdevregistry-up() {
     ocdevutil-docker-init
-    local bindir="$OCDEV_DOCKER_BINDIR" imagesdir="$PWD/images"
+    local bindir="$OCDEV_IMAGEREGISTRY_DOCKER_BINDIR" imagesdir="$OCDEV_IMAGEREGISTRY_TOPLEVEL/images"
     oadm registry -o json |
         jq --arg bindir "$bindir" --arg imagesdir "$imagesdir" '
             path(.items[] | select(.kind == "Service" and .metadata.name == "docker-registry")) as $svc |

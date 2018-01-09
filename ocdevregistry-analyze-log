@@ -185,7 +185,7 @@ while (my ($http_request_id, $records) = each(%$requests)) {
     }
 
     if (@problems) {
-        print "\nREQUEST $http_request_id\n";
+        print "REQUEST $http_request_id\n";
         print "\n";
         foreach my $key (qw(http_request_method http_request_uri openshift_auth_user openshift_auth_userid vars_name vars_reference vars_digest)) {
             print "  - $key = $request->{$key}\n" if $request->{$key};
@@ -198,5 +198,6 @@ while (my ($http_request_id, $records) = each(%$requests)) {
         foreach my $record (@$records) {
             print "    ".format_record($record)."\n";
         }
+        print "\n";
     }
 }
