@@ -20,9 +20,13 @@ sub logrus_line {
     }
     my $http_request_id = $record->{"http.request.id"};
     if (!$http_request_id) {
-        if ($orig_line !~ m/getImage: got image|getImageStream: got image stream|getImageStream: returning cached copy|as Docker Registry URL/) {
-            #print "$orig_line\n";
+        if ($record->{level} && $record->{level} eq "debug") {
+            return;
         }
+        if ($orig_line =~ m/getImage: got image|getImageStream: got image stream|getImageStream: returning cached copy|as Docker Registry URL/) {
+            return;
+        }
+        print "$orig_line\n";
         return;
     }
     push(@{$requests->{$http_request_id} //= []}, $record);
@@ -38,7 +42,7 @@ sub access_line {
             return;
         }
         if ($status_code >= 400) {
-            #print "$line\n";
+            print "$line\n";
         }
     } else {
         die "unable to parse access line: [$line]";
@@ -47,10 +51,8 @@ sub access_line {
 
 sub glog_line {
     my ($line) = @_;
-    if ($line =~ /http: TLS handshake error from/) {
-    } else {
-        print "$line\n";
-    }
+    chomp($line);
+    print "$line\n";
 }
 
 while (<>) {
