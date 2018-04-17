@@ -25,6 +25,7 @@ usage() {
     echo "  login-as-pruner     Login as the pruner user"
     echo "  godoc               Run godoc for github.com/openshift/origin"
     echo "  test-end-to-end     Build images and run end-to-end tests"
+    echo "  cleanup             (Shoot in the foot) Empty Docker and remove a lot of files"
     echo
     echo "Commands for components:"
     echo "  start-router        Start the router"
@@ -387,6 +388,15 @@ ocdev-test-end-to-end() {
     docker images --format="{{.Repository}}:{{.Tag}}" |
         grep ':local-end-to-end$' |
         xargs -r docker rmi
+}
+
+ocdev-cleanup() {
+    local rc=0
+    docker ps -aq | xargs -r docker rm -fv || rc=$?
+    mount | grep -F "/var/lib/origin" | cut -d' ' -f3 | xargs -r sudo umount || rc=$?
+    sudo rm -vrf "/var/lib/origin" || rc=$?
+    sudo rm -vrf "./openshift.local.clusterup/" || rc=$?
+    exit $rc
 }
 
 # }}}

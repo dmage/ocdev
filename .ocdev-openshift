@@ -162,7 +162,9 @@ ocdevopenshift-up() {
 }
 
 ocdevopenshift-down() {
-    docker kill origin
+    if [ -n "$(docker ps -qf name='^/origin$')" ]; then
+        docker kill origin
+    fi
 }
 
 ocdevopenshift-logs() {
@@ -181,13 +183,15 @@ ocdevopenshift-anonymous-debug() {
 }
 
 ocdevopenshift-destroy() {
-    docker kill origin || true
-    mount | grep -F "$OCDEV_VARDIR/openshift.local.volumes" | cut -d' ' -f3 | xargs -r sudo umount
-    mount | grep -F "$OCDEV_VARDIR/in-docker/volumes" | cut -d' ' -f3 | xargs -r sudo umount
+    local rc=0
+    docker rm -v kill origin || rc=$?
+    mount | grep -F "$OCDEV_VARDIR/openshift.local.volumes" | cut -d' ' -f3 | xargs -r sudo umount || rc=$?
+    mount | grep -F "$OCDEV_VARDIR/in-docker/volumes" | cut -d' ' -f3 | xargs -r sudo umount || rc=$?
     if is_docker_for_mac; then
         docker run --rm -v /:/rootfs:rw busybox sh -c 'V=/rootfs/ocdev/volumes; rm -rf $V && mkdir -p $V'
     fi
-    sudo rm -rf "$OCDEV_VARDIR"
+    sudo rm -vrf "$OCDEV_VARDIR" || rc=$?
+    exit $rc
 }
 
 ocdevutil-main ".ocdevopenshift-" "ocdevopenshift-" "$@"

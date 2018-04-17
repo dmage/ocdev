@@ -11,9 +11,12 @@ usage() {
     echo "  rollout        Redeploy the registry"
     echo "  update         Rebuild and redeploy the registry"
     echo "  up             Create Service and DeploymentConfig for the registry"
+    echo "  patch          Patch the DeploymentConfig for the registry to use the local image"
     echo "  logs           Fetch the logs of the registry"
     echo "  test           Run tests for the registry"
     echo "  test-extended  Run extended tests for the registry"
+    echo "  hard-prune     Run the hard-prune"
+    echo "  analyze-log    Analyze the registry log"
     echo
     echo "Commands to change the configuration:"
     echo "  login-docker         Run docker login for the registry"
@@ -109,6 +112,51 @@ ocdevregistry-up() {
             }])
         ' |
         ocdefault create -f -
+    oadm policy add-scc-to-user hostaccess -z registry
+}
+
+ocdevregistry-patch() {
+    ocdevutil-docker-init
+    local bindir="$OCDEV_IMAGEREGISTRY_DOCKER_BINDIR" imagesdir="$OCDEV_IMAGEREGISTRY_TOPLEVEL/images"
+    ocdefault patch dc docker-registry --patch '{
+        "spec": {
+            "template": {
+                "spec": {
+                    "containers": [
+                        {
+                            "name": "registry",
+                            "image": "openshift/origin-docker-registry:latest",
+                            "imagePullPolicy": "Never",
+                            "volumeMounts": [
+                                {
+                                    "name": "openshift-bin",
+                                    "mountPath": "/openshift/bin"
+                                },
+                                {
+                                    "name": "openshift-images",
+                                    "mountPath": "/openshift/images"
+                                }
+                            ]
+                        }
+                    ],
+                    "volumes": [
+                        {
+                            "name": "openshift-bin",
+                            "hostPath": {
+                                "path": "'$bindir'"
+                            }
+                        },
+                        {
+                            "name": "openshift-images",
+                            "hostPath": {
+                                "path": "'$imagesdir'"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    }'
     oadm policy add-scc-to-user hostaccess -z registry
 }
 

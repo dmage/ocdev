@@ -8,6 +8,7 @@ usage() {
     echo "  build-image  Build oc and Docker images"
     echo "  up           Start the cluster in Docker"
     echo "  down         Stop the cluster in Docker"
+    echo "  destroy      Stop and destroy the cluster"
 }
 
 ocdevcluster-build() {
