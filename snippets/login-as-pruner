@@ -1,0 +1,6 @@
+#!/bin/bash -eu
+#
+# OCDEV HELP: Login as the pruner user
+
+oc login -u pruner -p pruner
+oadm policy add-cluster-role-to-user system:image-pruner pruner

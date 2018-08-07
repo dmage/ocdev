@@ -1,4 +1,7 @@
 #!/usr/bin/env perl
+
+# OCDEV HELP: Analyze the registry log
+
 use strict;
 use warnings;
 

@@ -1,0 +1,5 @@
+#!/bin/bash -eu
+#
+# OCDEV HELP: Login as the developer user
+
+oc login -u developer -p developer

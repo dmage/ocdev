@@ -1,0 +1,11 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Run go tool pprof against the registry
+
+err=0 pod= tmp= path="$1"; shift
+pod=$(ocdefault get pods -l deploymentconfig=docker-registry -o jsonpath='{.items[0].metadata.name}  ')
+tmp=$(mktemp -d "${TMPDIR:-/tmp}"/ocdev-registry-pprof.XXXXXXXX)
+ocdefault exec "$pod" -- wget -q "http://127.0.0.1:6060$path" -O - >"$tmp/profile"
+go tool pprof "$@" "$(which dockerregistry)" "$tmp/profile" || err=$?
+rm -rf "$tmp"
+exit $err

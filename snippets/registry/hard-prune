@@ -1,0 +1,6 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Run the hard-prune
+
+oadm policy add-cluster-role-to-user system:image-pruner system:serviceaccount:default:registry
+ocdefault rsh dc/docker-registry env REGISTRY_LOG_LEVEL=debug /usr/bin/dockerregistry -prune=delete

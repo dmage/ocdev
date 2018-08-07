@@ -1,0 +1,48 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Patch the DeploymentConfig for the registry to use the local image
+
+BINDIR="$OCDEV_IMAGEREGISTRY_DOCKER_BINDIR"
+IMAGESDIR="$OCDEV_IMAGEREGISTRY_TOPLEVEL/images"
+
+ocdev registry build-image
+ocdefault patch dc docker-registry --patch '{
+    "spec": {
+        "template": {
+            "spec": {
+                "containers": [
+                {
+                    "name": "registry",
+                        "image": "openshift/origin-docker-registry:latest",
+                        "imagePullPolicy": "Never",
+                        "volumeMounts": [
+                        {
+                            "name": "openshift-bin",
+                            "mountPath": "/openshift/bin"
+                        },
+                        {
+                            "name": "openshift-images",
+                            "mountPath": "/openshift/images"
+                        }
+                        ]
+                }
+                ],
+                "volumes": [
+                {
+                    "name": "openshift-bin",
+                    "hostPath": {
+                        "path": "'$BINDIR'"
+                    }
+                },
+                {
+                    "name": "openshift-images",
+                    "hostPath": {
+                        "path": "'$IMAGESDIR'"
+                    }
+                }
+                ]
+            }
+        }
+    }
+}'
+oadm policy add-scc-to-user hostaccess -z registry

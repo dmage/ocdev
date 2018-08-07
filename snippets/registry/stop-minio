@@ -1,0 +1,5 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Delete the minio container
+
+docker rm -f -v minio

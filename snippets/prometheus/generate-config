@@ -1,0 +1,24 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Generate configuration for Prometheus
+
+cat <<END
+global:
+  scrape_interval:     5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  - job_name: 'docker-registry'
+    metrics_path: /extensions/v2/metrics
+    bearer_token: mysecret
+    static_configs:
+      - targets: ['172.30.1.1:5000']
+END

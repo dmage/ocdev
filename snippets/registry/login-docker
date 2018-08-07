@@ -1,0 +1,7 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Run docker login for the registry
+
+U="$(oc whoami)"
+P="$(oc whoami -t)"
+docker login -u "$U" -p "$P" 172.30.1.1:5000

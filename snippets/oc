@@ -1,0 +1,12 @@
+#!/bin/bash -eu
+#
+# OCDEV HELP: Run oc from the current source tree
+#
+# Run the oc binary from origin's _output directory.
+#
+# You might find helpful to set an alias
+#
+#   alias oc="ocdev oc"
+#
+
+oc "$@"

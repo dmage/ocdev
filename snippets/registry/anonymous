@@ -1,0 +1,5 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Disable authorization for all namespaces
+
+oadm policy add-cluster-role-to-user registry-viewer system:anonymous

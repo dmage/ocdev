@@ -1,0 +1,13 @@
+#!/bin/sh -eu
+#
+# OCDEV HELP: Print the bash-completion script
+
+    cat <<'END'
+_ocdev()
+{
+    local commands=$(ocdev commands "${COMP_WORDS[@]:1:COMP_CWORD-1}")
+    COMPREPLY=( $(compgen -W "${commands}" -- "${COMP_WORDS[COMP_CWORD]}") )
+    return 0
+}
+complete -o bashdefault -o default -F _ocdev ocdev
+END

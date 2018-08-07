@@ -1,0 +1,5 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Fetch the logs of the registry
+
+ocdefault logs dc/docker-registry "$@"

@@ -1,0 +1,5 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Disable authorization for /debug/pprof endpoints
+
+ocdefault adm policy add-cluster-role-to-user cluster-debugger system:anonymous

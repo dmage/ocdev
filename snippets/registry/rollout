@@ -1,0 +1,6 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Redeploy the registry
+
+ocdefault rollout latest dc/docker-registry || true
+ocdefault rollout status dc/docker-registry

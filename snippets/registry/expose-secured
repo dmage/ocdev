@@ -1,0 +1,39 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Secure the registry and configure Docker
+
+master="$OCDEV_VARDIR/openshift.local.config/master"
+oadm ca create-server-cert \
+    --signer-cert="$master/ca.crt" \
+    --signer-key="$master/ca.key" \
+    --signer-serial="$master/ca.serial.txt" \
+    --hostnames='registry.127.0.0.1.nip.io,docker-registry.default.svc.cluster.local,172.30.1.1' \
+    --cert="$OCDEV_VARDIR/registry-secrets/registry.crt" \
+    --key="$OCDEV_VARDIR/registry-secrets/registry.key"
+ocdefault secrets new registry-secret \
+    "$OCDEV_VARDIR/registry-secrets/registry.crt" \
+    "$OCDEV_VARDIR/registry-secrets/registry.key" || true
+ocdefault secrets link registry registry-secret
+ocdefault secrets link default  registry-secret
+ocdefault volume dc/docker-registry --add --type=secret \
+    --secret-name=registry-secret -m /etc/secrets || true
+ocdefault set env dc/docker-registry \
+    REGISTRY_HTTP_TLS_CERTIFICATE=/etc/secrets/registry.crt \
+    REGISTRY_HTTP_TLS_KEY=/etc/secrets/registry.key
+ocdefault patch dc/docker-registry -p '{"spec": {"template":
+  {"spec": {"containers":[{
+    "name":"registry",
+    "livenessProbe":  {"httpGet": {"scheme":"HTTPS"}},
+    "readinessProbe": {"httpGet": {"scheme":"HTTPS"}}
+  }]}}
+}}'
+ocdefault create route passthrough --service=docker-registry --hostname=registry.127.0.0.1.nip.io || true
+sudo mkdir -p /etc/docker/certs.d/registry.127.0.0.1.nip.io
+sudo cp "$master/ca.crt" /etc/docker/certs.d/registry.127.0.0.1.nip.io/ca.crt
+ocdefault rollout status dc/docker-registry
+ocdefault rollout status dc/router
+echo
+echo 'Done. You can check it using the command:'
+echo
+echo '  curl -v -k https://registry.127.0.0.1.nip.io/v2/'
+echo

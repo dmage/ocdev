@@ -1,0 +1,6 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Rebuild and redeploy the registry
+
+ocdev registry build
+ocdev registry rollout

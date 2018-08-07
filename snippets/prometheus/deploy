@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# OCDEV USAGE: <prometheus.yml>
+# OCDEV HELP: Deploy Prometheus
+
+[ $# -ge 1 ] || {
+    echo "usage: $OCDEV_PROGNAME <prometheus.yml>" >&2
+        exit 1
+}
+
+oc new-app google/cadvisor
+oc new-app prom/prometheus
+
+oc expose service cadvisor --hostname='cadvisor.127.0.0.1.nip.io'
+oc expose service prometheus --hostname='prometheus.127.0.0.1.nip.io'
+
+oc create configmap prom-config --from-file="$1"
+
+oc patch dc/prometheus -p '{"spec": {"template": {"spec": {
+    "volumes": [{
+        "name": "prom-config-volume",
+            "configMap": {
+                "name": "prom-config",
+                "defaultMode": 420
+            }
+    }],
+        "containers":[{
+            "name": "prometheus",
+            "volumeMounts": [{
+                "name": "prom-config-volume",
+                "mountPath": "/etc/prometheus/"
+            }]
+        }]
+} } } }'
+
+oc rollout status dc/prometheus

@@ -1,0 +1,13 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Enable support for schema version 2
+
+ocdefault patch dc docker-registry -p '{"spec": {"template":
+  {"spec": {"containers": [{
+    "name": "registry",
+    "env": [
+      {"name": "REGISTRY_MIDDLEWARE_REPOSITORY_OPENSHIFT_ACCEPTSCHEMA2", "value": "true"}
+    ]
+  }]}}
+}}'
+ocdefault rollout status dc/docker-registry

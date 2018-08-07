@@ -1,47 +1,109 @@
 #!/bin/bash
 # vim:set foldmethod=marker:
-set -efu
+set -eu
 
 export OCDEV_VARDIR=${OCDEV_VARDIR:-$HOME/.ocdev}
-export OCDEV_GOLANG_IMAGE=${OCDEV_GOLANG_IMAGE:-golang:1.8}
-export OCDEV_ORIGIN_PACKAGE=github.com/openshift/origin
-export OCDEV_IMAGEREGISTRY_PACKAGE=github.com/openshift/image-registry
-OCDEV_PROGNAME=$(basename "$0")
+export OCDEV_ORIGIN_PACKAGE=${OCDEV_ORIGIN_PACKAGE:-github.com/openshift/origin}
+export OCDEV_IMAGEREGISTRY_PACKAGE=${OCDEV_IMAGEREGISTRY_PACKAGE:-github.com/openshift/image-registry}
+
+# {{{ usage
+
+inspect_line() {
+    sed -n 's/.*OCDEV '$1': \(.*\)/\1/p' "$2"
+}
+
+inspect_section() {
+    perl <"$2" -ne '
+        if (defined $prefix) {
+            if (/^\Q$stripped_prefix\E\s*$/) {
+                print "\n";
+            } elsif (/^\Q$prefix\E(.*)$/) {
+                $_ = $1;
+                if (/^OCDEV /) { exit }
+                print "$_\n";
+            }
+        }
+        if (/^(.*)OCDEV '$1'(:|$)/) {
+            $prefix=$1;
+            $stripped_prefix=$1;
+            $stripped_prefix =~ s/\s*$//;
+        }
+    '
+}
+
+commands() {
+    for f in "$1"/*; do
+        if [ -f "$f" ] && [ -x "$f" ]; then
+            printf "%s\n" "${f##*/}"
+        elif [ -d "$f" ]; then
+            printf "%s\n" "${f##*/}"
+        fi
+    done
+}
+
+usage_commands() {
+    local f name w=0
+    for f in "$1"/*; do
+        [ -f "$f" ] && [ -x "$f" ] || continue
+        name=${f##*/}
+        if [ ${#name} -gt $w ]; then
+            w=${#name}
+        fi
+    done
+    if [ $w != 0 ]; then
+        printf "\nAvailable commands:\n"
+    fi
+    for f in "$1"/*; do
+        [ -f "$f" ] && [ -x "$f" ] || continue
+        name=${f##*/}
+        printf "  %*s  %s\n" "-$w" "$name" "$(inspect_line HELP "$f")"
+    done
+}
+
+usage_components() {
+    local f name w=0
+    for f in "$1"/*; do
+        [ -d "$f" ] || continue
+        name=${f##*/}
+        if [ ${#name} -gt $w ]; then
+            w=${#name}
+        fi
+    done
+    if [ $w != 0 ]; then
+        printf "\nCommands for components:\n"
+    fi
+    for f in "$1"/*; do
+        [ -d "$f" ] || continue
+        name=${f##*/}
+        printf "  %*s  %s\n" "-$w" "$name" "$(test -e "$f/HELP" && inspect_line HELP "$f/HELP")"
+    done
+}
 
 usage() {
-    echo "usage: $OCDEV_PROGNAME <command>"
-    echo
-    echo "Available commands:"
-    echo "  show-toplevel       Show the absolute path of the top-level directory"
-    echo "  show-bindir         Show the absolute path of the directory with OpenShift binaries"
-    echo "  env                 Display the commands to set up the environment"
-    echo "  oc                  Run oc from the current source tree"
-    echo "  ocdefault           Run oc command as the system:admin user in the default namespace"
-    echo "  oadm                Run openshift admin as the system:admin user"
-    echo "  exec                Run a program from the directory with OpenShift binaries"
-    echo "  build               Build an OpenShift binary"
-    echo "  docker-build        Cross-compile an OpenShift binary for a Docker image"
-    echo "  login-as-developer  Login as the developer user"
-    echo "  login-as-pruner     Login as the pruner user"
-    echo "  godoc               Run godoc for github.com/openshift/origin"
-    echo "  test-end-to-end     Build images and run end-to-end tests"
-    echo "  cleanup             (Shoot in the foot) Empty Docker and remove a lot of files"
-    echo
-    echo "Commands for components:"
-    echo "  start-router        Start the router"
-    echo "  cluster             Manage an OpenShift cluster"
-    echo "  openshift           Manage the OpenShift server"
-    echo "  pod                 Manage the pod image"
-    echo "  registry            Manage the integrated Docker registry"
-    echo "  prometheus          Manage Prometheus"
-    echo
-    echo "Usage examples:"
-    echo "  ocdev cluster build"
-    echo "  ocdev openshift start --loglevel=4"
-    echo "  ocdev registry up"
-    echo
-    echo "  ocdev registry update"
+    local is_dir= help_file usage
+    if [ -d "$2" ]; then
+        is_dir=1
+        help_file="$2/HELP"
+        test -e "$help_file" || help_file=
+    else
+        help_file="$2"
+    fi
+
+    [ -z "$help_file" ] || usage=$(inspect_line USAGE "$help_file")
+    if [ -z "$usage" ] && [ -n "$is_dir" ]; then
+        usage="<command>"
+    fi
+
+    echo "usage: $1${usage:+ }${usage}"
+    [ -z "$help_file" ] || inspect_section HELP "$help_file"
+    if [ -n "$is_dir" ]; then
+        usage_commands "$2"
+        usage_components "$2"
+    fi
+    [ -z "$help_file" ] || inspect_section MORE "$help_file"
 }
+
+# }}}
 
 # {{{ unprefixed utils
 
@@ -88,97 +150,6 @@ export -f oadm
 
 # {{{ ocdevutil
 
-ocdevutil-commands() {
-    for prefix do
-        compgen -c "$prefix" | while read -r cmd; do
-            printf "%s\n" "${cmd#$prefix}"
-        done
-    done
-}
-export -f ocdevutil-commands
-
-ocdevutil-init() {
-    local name pkg dir os arch
-    os=$(go env GOHOSTOS)
-    arch=$(go env GOHOSTARCH)
-    for name in ORIGIN IMAGEREGISTRY; do
-        eval 'pkg="$OCDEV_'$name'_PACKAGE"'
-        if dir=$(pkgdir "$pkg"); then
-            eval 'export OCDEV_'$name'_TOPLEVEL=$dir'
-            eval 'export OCDEV_'$name'_BINDIR=$dir/_output/local/bin/$os/$arch'
-            eval 'export PATH="$OCDEV_'$name'_BINDIR:$PATH"'
-        fi
-    done
-}
-export -f ocdevutil-init
-
-ocdevutil-docker-init() {
-    [ -n "${OCDEV_DOCKER_GOOS-}" ] || OCDEV_DOCKER_GOOS=$(docker run --rm "$OCDEV_GOLANG_IMAGE" go env GOOS)
-    [ -n "${OCDEV_DOCKER_GOARCH-}" ] || OCDEV_DOCKER_GOARCH=$(docker run --rm "$OCDEV_GOLANG_IMAGE" go env GOARCH)
-    export OCDEV_DOCKER_GOOS OCDEV_DOCKER_GOARCH
-
-    local name pkg dir
-    for name in ORIGIN IMAGEREGISTRY; do
-        eval 'pkg="$OCDEV_'$name'_PACKAGE"'
-        if dir=$(pkgdir "$pkg"); then
-            eval 'export OCDEV_'$name'_DOCKER_BINDIR=$dir/_output/local/bin/$OCDEV_DOCKER_GOOS/$OCDEV_DOCKER_GOARCH'
-        fi
-    done
-}
-export -f ocdevutil-docker-init
-
-ocdevutil-main() {
-    [ -z "${OCDEV_TRACE-}" ] || set -x
-
-    local helperprefix=$1 prefix=$2; shift 2
-
-    [ $# -ge 1 ] || { usage >&2; exit 1; }
-
-    if type "$helperprefix$1" >/dev/null 2>&1; then
-        export OCDEV_PROGNAME="${OCDEV_PROGNAME-}${OCDEV_PROGNAME:+ }$1"
-        "$helperprefix$@"
-        exit
-    fi
-
-    case "$1" in
-    commands)
-        if [ $# -eq 1 ]; then
-            echo "commands"
-            echo "help"
-            ocdevutil-commands "$helperprefix" "$prefix"
-        elif type -f "$helperprefix$2" >/dev/null 2>&1; then
-            export OCDEV_PROGNAME="${OCDEV_PROGNAME-}${OCDEV_PROGNAME:+ }$2"
-            local helper="$helperprefix$2"
-            shift 2
-            "$helper" commands "$@"
-        fi
-        exit
-        ;;
-    help)
-        if [ $# -eq 1 ]; then
-            usage
-        elif type -f "$helperprefix$2" >/dev/null 2>&1; then
-            export OCDEV_PROGNAME="${OCDEV_PROGNAME-}${OCDEV_PROGNAME:+ }$2"
-            local helper="$helperprefix$2"
-            shift 2
-            "$helper" help "$@"
-        fi
-        exit
-        ;;
-    esac
-
-    ocdevutil-init
-
-    if type "$prefix$1" >/dev/null 2>&1; then
-        export OCDEV_PROGNAME="${OCDEV_PROGNAME-}${OCDEV_PROGNAME:+ }$1"
-        "$prefix$@"
-    else
-        usage >&2
-        exit 1
-    fi
-}
-export -f ocdevutil-main
-
 ocdevutil-remove-image() {
     if docker images -q "$1" | grep . >/dev/null; then
         docker rmi -f "$1"
@@ -199,8 +170,6 @@ ocdevutil-build-image-cleanup() {
 export -f ocdevutil-build-image-cleanup
 
 ocdevutil-build-image() {
-    ocdevutil-docker-init
-
     local generator=$1 name=$2; shift 2
 
     if [ -n "$OCDEV_BUILD_IMAGE_TMP" ]; then
@@ -222,188 +191,79 @@ export -f ocdevutil-build-image
 
 # }}}
 
-# {{{ .ocdev
-
-.ocdev-bash-completion() {
-    cat <<'END'
-_ocdev()
-{
-    local commands=$(ocdev commands "${COMP_WORDS[@]:1:COMP_CWORD-1}")
-    COMPREPLY=( $(compgen -W "${commands}" -- "${COMP_WORDS[COMP_CWORD]}") )
-    return 0
-}
-complete -o bashdefault -o default -F _ocdev ocdev
-END
-}
-
-# Typical usage:
-#
-#     alias oc="ocdev oc"
-#
-# This command is made as a helper, because it should not change the working
-# directory. Otherwise it will break relative paths:
-#
-#     oc create -f ./file.yaml
-#
-.ocdev-oc() {
-    ocdevutil-init
-    oc "$@"
-}
-
-.ocdev-ocdefault() {
-    ocdevutil-init
-    ocdefault "$@"
-}
-
-.ocdev-oadm() {
-    ocdevutil-init
-    oadm "$@"
-}
-
-.ocdev-exec() {
-    ocdevutil-init
-
-    # hide internals (ocdev-show-toplevel, usage, etc),
-    # because `ocdev exec ocdev-show-toplevel` should not work.
-    local prog name=$1; shift
-    if ! prog=$(which "$name"); then
-        exit 1
-    fi
-
-    "$prog" "$@"
-}
-
-# }}}
-
-# {{{ ocdev
-
-ocdev-show-toplevel() {
-    pwd
-}
-
-ocdev-show-bindir() {
-    echo "$OCDEV_BINDIR"
-}
-
-ocdev-env() {
-    printf "export PATH=%q\n" "$PATH"
-}
-
-ocdev-build() {
-    ./hack/build-go.sh "$@"
-}
-
-ocdev-docker-build() {
-    # FIXME(dmage): fix it for macOS
-    ocdevutil-docker-init
-    GOOS=$OCDEV_DOCKER_GOOS GOARCH=$OCDEV_DOCKER_GOARCH CGO_ENABLED=1 ocdev-build "$@"
-}
-
-ocdev-login-as-developer() {
-    oc login -u developer -p developer
-}
-
-ocdev-login-as-pruner() {
-    oc login -u pruner -p pruner
-    oadm policy add-cluster-role-to-user system:image-pruner pruner
-}
-
-ocdev-godoc() {
-    if ! type bindfs >/dev/null 2>/dev/null; then
-        printf "%s\n" >&2 \
-            "This command requires bindfs to be installed." \
-            "" \
-            "Fedora: dnf install bindfs" \
-            "Gentoo: emerge -av bindfs" \
-            "macOS: brew install bindfs" \
-            "Ubuntu: apt-get install bindfs" \
-            "" \
-            "Please visit http://bindfs.org/ for other options." \
-            ""
-        fatal "findfs is not found"
-    fi
-
-    open_url() {
-        echo "$1"
-        if type xdg-open >/dev/null 2>&1; then
-            xdg-open "$1"
-        else
-            open "$1"
-        fi || true
-    }
-
-    fuse_unmount() {
-        if type fusermount >/dev/null 2>&1; then
-            fusermount -q -u "$@"
-        else
-            umount "$@"
+init() {
+    local name pkg dir os arch
+    os=$(go env GOHOSTOS)
+    arch=$(go env GOHOSTARCH)
+    export OCDEV_ORIG_PATH="$PATH"
+    for name in ORIGIN IMAGEREGISTRY; do
+        eval 'pkg="$OCDEV_'$name'_PACKAGE"'
+        if dir=$(pkgdir "$pkg"); then
+            eval 'export OCDEV_'$name'_TOPLEVEL=$dir'
+            eval 'export OCDEV_'$name'_BINDIR=$dir/_output/local/bin/$os/$arch'
+            eval 'export PATH="$OCDEV_'$name'_BINDIR:$PATH"'
         fi
-    }
-
-    local pkg
-    pkg=$(go list -e -f "{{.ImportPath}}" .)
-
-    _TMP=$(mktemp -d "${TMPDIR:-/tmp}"/ocdev-godoc.XXXXXXXX)
-    cleanup() {
-        trap - EXIT
-        fuse_unmount "$_TMP/src/$pkg" || true
-        rm -rf "$_TMP"
-        exit "$1"
-    }
-    trap 'cleanup $?' EXIT
-    trap 'cleanup 1' HUP PIPE INT QUIT TERM
-
-    mkdir -p "$_TMP/src/$pkg"
-    bindfs --no-allow-other "$PWD" "$_TMP/src/$pkg"
-
-    {
-        for i in 1 2 3 4 5 6 7 8 9 10; do
-            curl -fs --max-time 1 "http://localhost:6060/" >/dev/null && break
-            sleep 0.5
-        done
-        open_url "http://localhost:6060/pkg/$pkg/"
-    }&
-    local err=0
-    GOPATH="$_TMP" godoc -http=:6060 "$@" || err=$?
-    kill %1
-    wait
-    exit $err
-}
-
-ocdev-test-end-to-end() {
-    rm -rf ./_output/scripts/test-end-to-end/
-
-    findmnt -lo TARGET | grep ^/tmp/openshift/ | xargs -r sudo umount
-    sudo rm -rf /tmp/openshift /var/lib/origin/openshift.local.pv/registry
-
-    for i in docker-builder sti-builder deployer keepalived-ipfailover haproxy-router; do
-        docker pull openshift/origin-$i:latest
     done
-    ocdev cluster build-image
-
-    docker images --format="{{.Repository}}:{{.Tag}}" |
-        sed -n -s 's,^\(\(docker.io/\)\?openshift/origin.*\):latest,\1,p' |
-        xargs -r -I {} docker tag {}:latest {}:local-end-to-end
-    USE_IMAGES='openshift/origin-${component}:local-end-to-end' TAG=local-end-to-end ./hack/test-end-to-end.sh
-    docker images --format="{{.Repository}}:{{.Tag}}" |
-        grep ':local-end-to-end$' |
-        xargs -r docker rmi
 }
 
-ocdev-cleanup() {
-    local rc=0
-    docker ps -aq | xargs -r docker rm -fv || rc=$?
-    mount | grep -F "/var/lib/origin" | cut -d' ' -f3 | xargs -r sudo umount || rc=$?
-    sudo rm -vrf "/var/lib/origin" || rc=$?
-    sudo rm -vrf "./openshift.local.clusterup/" || rc=$?
-    exit $rc
+main() {
+    [ -z "${OCDEV_TRACE-}" ] || set -x
+
+    local progname="$1" snippets="$2"; shift 2
+
+    [ $# -ge 1 ] || { usage "$progname" "$snippets" >&2; exit 1; }
+
+    if [ -f "$snippets/$1" ] && [ -x "$snippets/$1" ]; then
+        init
+        export OCDEV_PROGNAME="$progname $1"
+        "$snippets/$@"
+        exit
+    elif [ -d "$snippets/$1" ]; then
+        progname="$progname $1"
+        snippets="$snippets/$1"
+        shift
+        main "$progname" "$snippets" "$@"
+        exit
+    fi
+
+    case "$1" in
+    commands)
+        if [ ! -d "$snippets" ]; then
+            exit 0
+        fi
+
+        if [ $# -eq 1 ]; then
+            echo "commands"
+            echo "help"
+            commands "$snippets"
+        else
+            progname="$progname $2"
+            snippets="$snippets/$2"
+            shift 2
+            main "$progname" "$snippets" commands "$@"
+        fi
+        exit
+        ;;
+    help)
+        if [ ! -f "$snippets" ] || [ ! -x "$snippets" ] && [ ! -d "$snippets" ]; then
+            printf "%s: no such command\n" "$progname" >&2
+            exit 1
+        fi
+
+        if [ $# -eq 1 ]; then
+            usage "$progname" "$snippets"
+        else
+            progname="$progname $2"
+            snippets="$snippets/$2"
+            shift 2
+            main "$progname" "$snippets" help "$@"
+        fi
+        exit
+        ;;
+    *)
+        usage "$progname" "$snippets" >&2
+        exit 1
+    esac
 }
 
-# }}}
-
-ocdev-start-router() {
-    oadm policy add-scc-to-user hostnetwork -z router
-    oadm router
-}
-
-ocdevutil-main ".ocdev-" "ocdev-" "$@"
+main "$(basename "$0")" "$(dirname "$0")/snippets" "$@"

@@ -1,0 +1,6 @@
+OCDEV HELP: Manage Prometheus
+OCDEV MORE
+
+Example:
+  ocdev prometheus generate-config >prometheus.yml
+  ocdev prometheus deploy prometheus.yml

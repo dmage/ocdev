@@ -1,0 +1,9 @@
+# OCDEV MORE
+#
+# Usage examples:
+#   ocdev cluster build
+#   ocdev openshift start --loglevel=4
+#   ocdev registry up
+#
+#   ocdev registry update
+# OCDEV END

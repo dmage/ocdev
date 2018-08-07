@@ -1,0 +1,18 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Enable the /debug/pprof endpoint
+
+ocdefault patch dc docker-registry -p '{"spec": {"template":
+  {"spec": {"containers": [{
+    "name": "registry",
+    "env": [
+      {"name": "OPENSHIFT_PROFILE", "value": "web"}
+    ]
+  }]}}
+}}'
+ocdefault rollout status dc/docker-registry
+echo
+echo 'Done. You can check it using the command:'
+echo
+echo '  ocdev registry pprof /debug/pprof/heap -inuse_space'
+echo

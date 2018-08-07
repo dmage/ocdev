@@ -1,0 +1,43 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Start minio and use it in the registry
+
+access=admin secret=password
+docker run --name minio -d \
+    -e MINIO_ACCESS_KEY="$access" \
+    -e MINIO_SECRET_KEY="$secret" \
+    -p 127.0.0.1:9000:9000 \
+    minio/minio:edge server /data
+minioip=$(docker inspect minio -f "{{.NetworkSettings.IPAddress}}")
+for i in {1..20}; do
+    curl -s "http://127.0.0.1:9000" >/dev/null && break || sleep 0.1
+done
+docker run --rm -i \
+    -e MINIO_IP="$minioip" \
+    -e MINIO_ACCESS_KEY="$access" \
+    -e MINIO_SECRET_KEY="$secret" \
+    --entrypoint /bin/sh \
+    minio/mc -c '
+        mc config host add minio "http://$MINIO_IP:9000" "$MINIO_ACCESS_KEY" "$MINIO_SECRET_KEY" S3v4 >/dev/null &&
+        mc mb minio/ocdev
+    '
+local storage=$(
+    jq -n \
+        --arg endpoint "http://$minioip:9000" \
+        --arg access "$access" \
+        --arg secret "$secret" \
+        '{
+            "cache": {"blobdescriptor": "inmemory"},
+            "s3": {
+                "accesskey": $access,
+                "secretkey": $secret,
+                "region": "us-east-1",
+                "regionendpoint": $endpoint,
+                "bucket": "ocdev",
+                "v4auth": true
+            },
+            "delete": {"enabled": true}
+        }'
+)
+ocdefault set env dc/docker-registry REGISTRY_STORAGE="$storage"
+ocdefault rollout status dc/docker-registry

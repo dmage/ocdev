@@ -1,0 +1,20 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Build the openshift/origin-docker-registry:latest Docker image
+
+origin_docker_registry_image() {
+    cp "$OCDEV_IMAGEREGISTRY_BINDIR/dockerregistry" ./
+    cp "$OCDEV_IMAGEREGISTRY_TOPLEVEL/images/dockerregistry/config.yml" ./
+    printf >./Dockerfile "%s\n" \
+        'FROM openshift/origin-docker-registry:latest' \
+        'USER 0' \
+        'COPY dockerregistry /openshift/bin/' \
+        'COPY config.yml /openshift/images/dockerregistry/' \
+        'RUN ln -sf /openshift/bin/dockerregistry /usr/bin/ && \' \
+        '    ln -sf /openshift/images/dockerregistry/config.yml /' \
+        'USER 1001'
+}
+
+ocdev registry build
+ocdevutil-remove-image openshift/origin-docker-registry:latest
+ocdevutil-build-image origin_docker_registry_image openshift/origin-docker-registry:latest

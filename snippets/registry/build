@@ -1,0 +1,6 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Build the dockerregistry binary
+
+cdpkg "$OCDEV_IMAGEREGISTRY_PACKAGE"
+./hack/build-go.sh cmd/dockerregistry

@@ -1,0 +1,6 @@
+#!/bin/sh -eu
+
+# OCDEV HELP: Start the router
+
+oadm policy add-scc-to-user hostnetwork -z router
+oadm router

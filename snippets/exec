@@ -1,0 +1,11 @@
+#!/bin/bash -eu
+#
+# OCDEV HELP: Run a program from the directory with OpenShift binaries
+
+# hide internals (fatal, pkgdir, etc), because `ocdev exec fatal` should not work.
+NAME=$1; shift
+if ! PROG=$(which "$NAME"); then
+    exit 1
+fi
+
+"$PROG" "$@"

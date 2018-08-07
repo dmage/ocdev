@@ -1,0 +1,5 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Run oc command as the system:admin user in the default namespace
+
+ocdefault "$@"
