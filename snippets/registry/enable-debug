@@ -1,0 +1,13 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Enable debug logs
+
+ocdefault patch dc docker-registry -p '{"spec": {"template":
+  {"spec": {"containers": [{
+    "name": "registry",
+    "env": [
+      {"name": "REGISTRY_LOG_LEVEL", "value": "debug"}
+    ]
+  }]}}
+}}'
+ocdefault rollout status dc/docker-registry
