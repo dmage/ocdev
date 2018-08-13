@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# OCDEV HELP: Run e2e tests for the image-registry
+#
+# This command runs the end-to-end tests for the image-registry.
+#
+# See also the definition of the pull-ci-image-registry-e2e job in [1].
+#
+# [1]: https://github.com/openshift/release/blob/master/ci-operator/jobs/openshift/image-registry/openshift-image-registry-presubmits.yaml
+
+cdpkg "$OCDEV_ORIGIN_PACKAGE"
+
+if oc status >/dev/null 2>&1; then
+    echo "You should shutdown your cluster first." >&2
+    exit
+fi
+
+# we need to have `iptables` in PATH
+export PATH="$PATH:/sbin:/usr/sbin"
+
+make build-extended-test
+FOCUS="Suite:openshift/registry/serial" \
+    make test-extended SUITE="core"

@@ -19,8 +19,10 @@ inspect_section() {
                 print "\n";
             } elsif (/^\Q$prefix\E(.*)$/) {
                 $_ = $1;
-                if (/^OCDEV /) { exit }
+                if (/^OCDEV /) { exit; }
                 print "$_\n";
+            } else {
+                exit;
             }
         }
         if (/^(.*)OCDEV '$1'(:|$)/) {
