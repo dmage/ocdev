@@ -4,6 +4,7 @@
 
 RC=0
 docker ps -aq | xargs -r docker rm -fv || RC=$?
+mount | grep -F "/var/lib/origin" | cut -d' ' -f3 | xargs -r sudo umount || true
 mount | grep -F "/var/lib/origin" | cut -d' ' -f3 | xargs -r sudo umount || RC=$?
 sudo rm -vrf "/var/lib/origin" || RC=$?
 sudo rm -vrf "./openshift.local.clusterup/" || RC=$?

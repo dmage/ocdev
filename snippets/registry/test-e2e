@@ -1,4 +1,5 @@
 #!/bin/bash
+set -eu
 
 # OCDEV HELP: Run e2e tests for the image-registry
 #
@@ -8,12 +9,9 @@
 #
 # [1]: https://github.com/openshift/release/blob/master/ci-operator/jobs/openshift/image-registry/openshift-image-registry-presubmits.yaml
 
-cdpkg "$OCDEV_ORIGIN_PACKAGE"
+ocdev check cluster-is-stopped
 
-if oc status >/dev/null 2>&1; then
-    echo "You should shutdown your cluster first." >&2
-    exit
-fi
+cdpkg "$OCDEV_ORIGIN_PACKAGE"
 
 # we need to have `iptables` in PATH
 export PATH="$PATH:/sbin:/usr/sbin"

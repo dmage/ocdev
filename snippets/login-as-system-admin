@@ -1,0 +1,5 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Login as the system administrator
+
+oc login -u system:admin

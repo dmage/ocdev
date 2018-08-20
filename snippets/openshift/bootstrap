@@ -1,0 +1,11 @@
+#!/bin/bash
+set -eu
+
+# OCDEV HELP: Build images and run a local cluster from them
+
+ocdev check cluster-is-stopped
+
+cdpkg "$OCDEV_ORIGIN_PACKAGE"
+make
+./hack/build-local-images.py
+oc cluster up --tag=latest

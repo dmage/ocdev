@@ -1,0 +1,16 @@
+#!/bin/bash
+set -eu
+
+# OCDEV HELP: Check that the cluster is running.
+
+if ! oc status >/dev/null 2>&1; then
+    echo "Expected a started cluster, but your cluster is not avaialbed." >&2
+    if [ -n "${OCDEV_FORCE_CLUSTER_IS_RUNNING-}" ]; then
+        exit 0
+    fi
+    echo >&2
+    echo "You may set the environment variable OCDEV_FORCE_CLUSTER_IS_RUNNING=1 to ignore this check." >&2
+    exit 1
+fi
+
+exit 0

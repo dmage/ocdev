@@ -1,0 +1,13 @@
+#!/bin/bash
+
+cdpkg "$OCDEV_ORIGIN_PACKAGE"
+
+if oc status >/dev/null 2>&1; then
+    echo "You should shutdown your cluster first." >&2
+    exit
+fi
+
+# we need to have `iptables` in PATH
+export PATH="$PATH:/sbin:/usr/sbin"
+
+make test-extended SUITE="${1?}"
