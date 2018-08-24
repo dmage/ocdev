@@ -5,6 +5,8 @@ set -eu
 
 ocdev check cluster-is-stopped
 
+ocdev cleanup
+
 cdpkg "$OCDEV_ORIGIN_PACKAGE"
 make
 ./hack/build-local-images.py

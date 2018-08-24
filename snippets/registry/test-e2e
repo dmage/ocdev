@@ -9,13 +9,16 @@ set -eu
 #
 # [1]: https://github.com/openshift/release/blob/master/ci-operator/jobs/openshift/image-registry/openshift-image-registry-presubmits.yaml
 
-ocdev check cluster-is-stopped
+ocdev check cluster-is-running
 
 cdpkg "$OCDEV_ORIGIN_PACKAGE"
+
+ocdev login-as-system-admin
 
 # we need to have `iptables` in PATH
 export PATH="$PATH:/sbin:/usr/sbin"
 
 make build-extended-test
+KUBECONFIG="$HOME/.kube/config" TEST_ONLY=1 \
 FOCUS="Suite:openshift/registry/serial" \
     make test-extended SUITE="core"

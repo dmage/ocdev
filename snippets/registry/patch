@@ -2,7 +2,7 @@
 
 # OCDEV HELP: Patch the DeploymentConfig for the registry to use the local image
 
-BINDIR="$OCDEV_IMAGEREGISTRY_DOCKER_BINDIR"
+BINDIR="$OCDEV_IMAGEREGISTRY_BINDIR"
 IMAGESDIR="$OCDEV_IMAGEREGISTRY_TOPLEVEL/images"
 
 ocdev registry build-image
