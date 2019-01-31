@@ -2,6 +2,8 @@
 
 # OCDEV HELP: Generate some garbage
 
+REGISTRY=$(ocdefault registry info)
+
 docker-force-pull() {
     docker pull "$1"
     docker rmi -f "$(docker inspect --format="{{.ID}}" "$1")"
@@ -11,22 +13,22 @@ docker-force-pull() {
 
 ocdev login-as-developer
 oc project myproject
-docker login -u $(oc whoami) -p $(oc whoami -t) 172.30.1.1:5000
+docker login -u $(oc whoami) -p $(oc whoami -t) $REGISTRY
 
 oc import-image dmage-a --from=dmage/example:a --confirm
-docker-force-pull 172.30.1.1:5000/myproject/dmage-a
+docker-force-pull $REGISTRY/myproject/dmage-a
 oc import-image dmage-b --from=dmage/example:b --confirm
-docker-force-pull 172.30.1.1:5000/myproject/dmage-b
+docker-force-pull $REGISTRY/myproject/dmage-b
 oc delete is/dmage-b
 
 docker pull busybox
 docker pull busybox:glibc
-docker tag busybox 172.30.1.1:5000/myproject/busybox
-docker push 172.30.1.1:5000/myproject/busybox
-docker tag busybox:glibc 172.30.1.1:5000/myproject/busybox-glibc
-docker push 172.30.1.1:5000/myproject/busybox-glibc
+docker tag busybox $REGISTRY/myproject/busybox
+docker push $REGISTRY/myproject/busybox
+docker tag busybox:glibc $REGISTRY/myproject/busybox-glibc
+docker push $REGISTRY/myproject/busybox-glibc
 oc delete is/busybox-glibc
 ocdefault delete image $(ocdefault get images | grep -F /myproject/busybox-glibc@ | cut -d' ' -f1)
-docker tag busybox 172.30.1.1:5000/myproject/busybox-empty
-docker push 172.30.1.1:5000/myproject/busybox-empty
+docker tag busybox $REGISTRY/myproject/busybox-empty
+docker push $REGISTRY/myproject/busybox-empty
 oc delete istag/busybox-empty:latest

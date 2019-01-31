@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+docker pull openshift/origin-docker-builder:v3.11
+docker tag openshift/origin-docker-builder:v3.11 openshift/origin-docker-builder:latest

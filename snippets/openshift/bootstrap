@@ -1,6 +1,7 @@
 #!/bin/bash
 set -eu
 
+# OCDEV USAGE: [--fast]
 # OCDEV HELP: Build images and run a local cluster from them
 
 ocdev check cluster-is-stopped
@@ -8,6 +9,10 @@ ocdev check cluster-is-stopped
 ocdev cleanup
 
 cdpkg "$OCDEV_ORIGIN_PACKAGE"
-make
-./hack/build-local-images.py
-oc cluster up --tag=latest
+if [ "${1-}" == "--fast" ]; then
+    shift
+else
+    make
+    python2 ./hack/build-local-images.py
+fi
+oc cluster up --tag=latest "$@"

@@ -1,0 +1,10 @@
+#!/bin/bash
+set -eu
+
+# OCDEV USAGE: [--tag=latest]
+# OCDEV HELP: Run a local cluster
+
+ocdev check cluster-is-stopped
+
+cdpkg "$OCDEV_ORIGIN_PACKAGE"
+oc cluster up "$@"

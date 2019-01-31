@@ -162,7 +162,7 @@ while (my ($http_request_id, $records) = each(%$requests)) {
     my @problems;
 
     my $duration = get_duration($request);
-    if ($duration >= 10) {
+    if ($duration >= 10 && $request->{http_request_method} ne "PATCH") {
         push(@problems, "duration: ${duration}s");
     }
 

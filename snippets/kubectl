@@ -1,0 +1,12 @@
+#!/bin/bash -eu
+#
+# OCDEV HELP: Run kubectl from the current source tree
+#
+# Run the kubectl binary from origin's _output directory.
+#
+# You might find helpful to set an alias
+#
+#   alias kubectl="ocdev kubectl"
+#
+
+kubectl "$@"

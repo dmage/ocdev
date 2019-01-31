@@ -20,5 +20,5 @@ export PATH="$PATH:/sbin:/usr/sbin"
 
 make build-extended-test
 KUBECONFIG="$HOME/.kube/config" TEST_ONLY=1 \
-FOCUS="Suite:openshift/registry/serial" \
+FOCUS=${FOCUS:-Suite:openshift/registry/serial} \
     make test-extended SUITE="core"
