@@ -1,0 +1,18 @@
+#!/bin/bash
+set -eu
+
+# OCDEV HELP: Run e2e tests for the image-registry on OKD 4.0
+#
+# This command runs the end-to-end tests for the image-registry.
+
+ocdev check cluster-is-running
+
+cdpkg "$OCDEV_ORIGIN_PACKAGE"
+
+# we need to have `iptables` in PATH
+export PATH="$PATH:/sbin:/usr/sbin"
+
+make WHAT=cmd/oc
+make WHAT=cmd/openshift-tests
+
+openshift-tests run all --dry-run | grep "Suite:openshift/registry/serial" | grep "TODO" | openshift-tests run -f -

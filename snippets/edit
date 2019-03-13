@@ -1,0 +1,6 @@
+#!/bin/bash -eu
+#
+# OCDEV HELP: Edit the snippet
+
+IFS="/"
+"${EDITOR:-vim}" "$(dirname "$0")/$*"

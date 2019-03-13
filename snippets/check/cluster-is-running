@@ -4,7 +4,7 @@ set -eu
 # OCDEV HELP: Check that the cluster is running.
 
 if ! oc status >/dev/null 2>&1; then
-    echo "Expected a started cluster, but your cluster is not avaialbed." >&2
+    echo "Expected a started cluster, but your cluster is not available." >&2
     if [ -n "${OCDEV_FORCE_CLUSTER_IS_RUNNING-}" ]; then
         exit 0
     fi

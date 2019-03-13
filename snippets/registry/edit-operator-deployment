@@ -1,0 +1,5 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Edit the depoloyment of the image registry operator
+
+kubectl -n openshift-image-registry edit deploy/cluster-image-registry-operator

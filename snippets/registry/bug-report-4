@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+# Postpone execution until the whole script is available.
+# It is useful if someone decides to use `curl ... | sh`.
+main(){
+
+cleanup() {
+    [ -z "${WORKDIR-}" ] || rm -rf "$WORKDIR"
+    exit "$1"
+}
+trap 'cleanup $?' EXIT
+trap 'cleanup 1' HUP PIPE INT QUIT TERM
+
+NOW=$(date -u +'%Y%m%d-%H%M%S')
+WORKDIR=$(mktemp -d -t image-registry-bug-report.XXXXXX)
+OUTDIR="$WORKDIR/image-registry-bug-report-$NOW"
+mkdir "$OUTDIR"
+
+for KIND in deployments pods; do
+    printf >&2 "getting %s...\n" "$KIND"
+    kubectl -n openshift-image-registry get "$KIND" -o json >"$OUTDIR/$KIND.json"
+done
+
+kubectl -n openshift-image-registry get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | while read -r POD; do
+    printf >&2 "getting logs for pod/%s...\n" "$POD"
+    kubectl -n openshift-image-registry logs "pod/$POD" >"$OUTDIR/pod-$POD.log"
+done
+
+tar -czf "image-registry-bug-report-$NOW.tar.gz" -C "$WORKDIR" "$(basename "$OUTDIR")"
+ls -alh "image-registry-bug-report-$NOW.tar.gz"
+
+};main

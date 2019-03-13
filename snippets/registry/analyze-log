@@ -32,6 +32,9 @@ sub logrus_line {
         print "$orig_line\n";
         return;
     }
+    if ($record->{msg} eq "response") {
+        return;
+    }
     push(@{$requests->{$http_request_id} //= []}, $record);
 }
 

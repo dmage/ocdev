@@ -82,7 +82,7 @@ usage_components() {
 }
 
 usage() {
-    local is_dir= help_file usage
+    local is_dir= help_file usage=
     if [ -d "$2" ]; then
         is_dir=1
         help_file="$2/HELP"
