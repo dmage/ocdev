@@ -11,12 +11,15 @@ if [ -z "$OVERRIDES" ]; then
     '
 fi
 
-kubectl patch clusterversion version --type json -p '
-- op: add
-  path: /spec/overrides/-
-  value:
-    kind: Deployment
-    name: cluster-image-registry-operator
-    namespace: openshift-image-registry
-    unmanaged: true
-'
+CURRENT=$(kubectl get clusterversion/version -o jsonpath='{.spec.overrides[?(@.name=="cluster-image-registry-operator")].name}')
+if [ -z "$CURRENT" ]; then
+    kubectl patch clusterversion version --type json -p '
+    - op: add
+      path: /spec/overrides/-
+      value:
+        kind: Deployment
+        name: cluster-image-registry-operator
+        namespace: openshift-image-registry
+        unmanaged: true
+    '
+fi

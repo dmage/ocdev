@@ -1,0 +1,10 @@
+#!/bin/bash -eu
+
+IMAGE=$1
+
+cdpkg "github.com/openshift/cluster-image-registry-operator"
+make build-image IMAGE="$IMAGE"
+docker push "$IMAGE"
+ocdev registry disable-cvo
+REF=$(docker inspect "$IMAGE" | jq -r '.[0].RepoDigests[0]')
+oc -n openshift-image-registry patch deploy cluster-image-registry-operator -p "$(jq -nc --arg IMAGE "$REF" '{"spec":{"template":{"spec":{"containers":[{"name":"cluster-image-registry-operator","image":$IMAGE}]}}}}')"
