@@ -7,4 +7,4 @@ ocdev check cluster-is-running
 ocdev login-as-system-admin
 
 cdpkg "$OCDEV_IMAGEREGISTRY_PACKAGE"
-TEST_KUBECONFIG="$HOME/.kube/config" make test-integration
+TEST_KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}" make test-integration

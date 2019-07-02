@@ -2,4 +2,4 @@
 
 # OCDEV HELP: Fetch the logs of the registry
 
-ocdefault logs dc/docker-registry "$@"
+kubectl -n openshift-image-registry logs deploy/image-registry "$@"
