@@ -1,4 +1,4 @@
-#!/bin/sh -eu
+#!/bin/bash -eu
 #
 # OCDEV HELP: Print the bash-completion script
 
