@@ -17,6 +17,7 @@ if [ -z "$CURRENT" ]; then
     - op: add
       path: /spec/overrides/-
       value:
+        group: apps/v1
         kind: Deployment
         name: cluster-image-registry-operator
         namespace: openshift-image-registry
