@@ -121,7 +121,8 @@ fatal() {
 export -f fatal
 
 pkgdir() {
-    local dir=$(go list -e -f '{{.Dir}}' "$1")
+    local dir
+    dir=$(cd / && go list -e -f '{{.Dir}}' "$1")
     if [ -z "$dir" ]; then
         return 1
     fi

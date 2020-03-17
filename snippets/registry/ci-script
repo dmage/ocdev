@@ -1,0 +1,6 @@
+#!/bin/sh
+BIN=$(dirname "$0")
+TAR=$(tar -C "$BIN" -c ci-filter-known color-logs | gzip -9 | base64)
+cat <<END
+export HOME=/tmp && cd /tmp && oc login https://api.ci.openshift.org --token=$(oc whoami -t) && echo $TAR | base64 -d | tar zx && oc -n default get pods -l docker-registry=default -o name | while read -r pod; do echo = \$pod; oc -n default logs "\$pod" | ./ci-filter-known | ./color-logs; done
+END

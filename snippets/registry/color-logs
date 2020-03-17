@@ -1,0 +1,49 @@
+#!/bin/sh
+
+# OCDEV HELP: Add colors to the image registry logs
+
+# colors
+ESC=$(printf '\033')
+C_RESET="$ESC[0m"
+C_ERROR="$ESC[0;31m"
+C_WARN="$ESC[0;33m"
+C_INFO="$ESC[0;36m"
+C_DEBUG="$ESC[0;34m"
+C_HTTP="$ESC[0;38;5;15m"
+C_SUCCESS="$ESC[1;32m"
+C_FAIL="$ESC[1;31m"
+
+# sed expressions
+WORD="[^ ][^ ]*"
+DATE="\[[^]]*\]"
+QQCHAR='([^\"]|\\.)'
+QQSTRING="\"$QQCHAR*\""
+
+opts='-u -r'
+if [ "$(uname -s)" == "Darwin" ]; then
+    opts='-E'
+fi
+
+exec sed $opts -e "
+    /^=/ {
+        s/^/$C_HTTP/
+    }
+    /^time/ {
+        s/msg=\"$QQCHAR*\(error\|cannot\)$QQCHAR*\"/$C_FAIL&$C_RESET/g
+        s/.*level=debug/$C_DEBUG&$C_RESET/
+        s/.*level=info/$C_INFO&$C_RESET/
+        s/.*level=warning/$C_WARN&$C_RESET/
+        s/.*level=error/$C_ERROR&$C_RESET/
+        s/(http\.response\.status=)([23])/\1$C_SUCCESS\2$C_RESET/
+        s/(http\.response\.status=)([45])/\1$C_FAIL\2$C_RESET/
+    }
+    /^I/ {
+        s/^I[^]]*\]/$C_INFO&$C_RESET/
+    }
+    /^[0-9]/ {
+        s/$/$C_RESET/
+        s/^($WORD $WORD $WORD $DATE $QQSTRING )([23][0-9][0-9]) /\1$C_SUCCESS\3$C_HTTP /
+        s/^($WORD $WORD $WORD $DATE $QQSTRING )([45][0-9][0-9]) /\1$C_FAIL\3$C_HTTP /
+        s/^/$C_HTTP/
+    }
+"
