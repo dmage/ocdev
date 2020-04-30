@@ -2,7 +2,9 @@
 # vim:set foldmethod=marker:
 set -eu
 
-export OCDEV_VARDIR=${OCDEV_VARDIR:-$HOME/.ocdev}
+XDG_DATA_HOME=${XDG_DATA_HOME:-$HOME/.local/share}
+
+export OCDEV_VARDIR=${OCDEV_VARDIR:-$XDG_DATA_HOME/ocdev}
 export OCDEV_ORIGIN_PACKAGE=${OCDEV_ORIGIN_PACKAGE:-github.com/openshift/origin}
 export OCDEV_IMAGEREGISTRY_PACKAGE=${OCDEV_IMAGEREGISTRY_PACKAGE:-github.com/openshift/image-registry}
 

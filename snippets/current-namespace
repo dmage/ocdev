@@ -1,0 +1,6 @@
+#!/bin/bash -eu
+#
+# OCDEV HELP: Print the current namespace
+
+NAMESPACE=$(kubectl config view --minify --output 'jsonpath={..namespace}')
+printf "%s\n" "${NAMESPACE:-default}"

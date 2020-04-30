@@ -1,0 +1,19 @@
+#!/bin/sh -eu
+
+NAMESPACE=${OCDEV_NAMESPACE:-$(ocdev current-namespace)}
+SERVICE=${OCDEV_SERVICE:-registry}
+
+NAMESPACE=${NAMESPACE:-default}
+HOSTNAME="$SERVICE.$NAMESPACE.svc"
+
+kubectl create -f - <<END
+apiVersion: operator.openshift.io/v1alpha1
+kind: ImageContentSourcePolicy
+metadata:
+  name: registry-test
+spec:
+  repositoryDigestMirrors:
+  - mirrors:
+    - $HOSTNAME
+    source: registry.test
+END

@@ -1,0 +1,36 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Generate a root Certificate Authority certificate
+
+OUTDIR=$OCDEV_VARDIR/certificates
+
+openssl_ca_config() {
+    cat <<END
+[req]
+distinguished_name = subject
+x509_extensions = x509_ext
+default_md = sha256
+prompt = no
+
+[subject]
+CN = ocdev@ca-$(date +%s)
+
+[x509_ext]
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer:always
+basicConstraints = CA:true
+END
+}
+
+printf "=== %s\n" "$OUTDIR/ca.crt"
+
+if [ ! -e "$OUTDIR/ca.crt" ]; then
+    mkdir -p "$OUTDIR"
+    openssl genrsa -out "$OUTDIR/ca.key" 2048
+    openssl req -new -x509 \
+        -key "$OUTDIR/ca.key" \
+        -days 365 -nodes -config <(openssl_ca_config) \
+        -out "$OUTDIR/ca.crt"
+fi
+
+openssl x509 -in "$OUTDIR/ca.crt" -noout -text

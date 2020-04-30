@@ -1,0 +1,8 @@
+#!/bin/sh -u
+
+SERVICE=${OCDEV_SERVICE:-registry}
+
+kubectl delete service "$SERVICE"
+kubectl delete deployment "$SERVICE"
+kubectl delete secret "$SERVICE-auth"
+kubectl delete secret "$SERVICE-certs"

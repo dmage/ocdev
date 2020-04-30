@@ -1,0 +1,81 @@
+#!/bin/sh -eu
+
+NAMESPACE=${OCDEV_NAMESPACE:-$(ocdev current-namespace)}
+SERVICE=${OCDEV_SERVICE:-registry}
+
+NAMESPACE=${NAMESPACE:-default}
+HOSTNAME="$SERVICE.$NAMESPACE.svc"
+
+ocdev generate-https-cert "$HOSTNAME"
+htpasswd -bBc "$OCDEV_VARDIR/htpasswd" admin qwerty
+
+kubectl create secret generic "$SERVICE-auth" --dry-run -o yaml --from-file="$OCDEV_VARDIR/htpasswd" | oc apply -f -
+kubectl create secret generic "$SERVICE-certs" --dry-run -o yaml --from-file="$OCDEV_VARDIR/certificates/$HOSTNAME/cert.pem" --from-file="$OCDEV_VARDIR/certificates/$HOSTNAME/key.pem" | oc apply -f -
+
+kubectl apply -f - <<END
+apiVersion: v1
+kind: List
+items:
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: $SERVICE
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: $SERVICE
+    template:
+      metadata:
+        labels:
+          app: $SERVICE
+      spec:
+        containers:
+        - env:
+          - name: REGISTRY_AUTH
+            value: htpasswd
+          - name: REGISTRY_AUTH_HTPASSWD_REALM
+            value: Registry
+          - name: REGISTRY_AUTH_HTPASSWD_PATH
+            value: /etc/auth/htpasswd
+          - name: REGISTRY_HTTP_TLS_CERTIFICATE
+            value: /etc/certs/cert.pem
+          - name: REGISTRY_HTTP_TLS_KEY
+            value: /etc/certs/key.pem
+          image: registry:2
+          name: registry
+          ports:
+          - containerPort: 5000
+            protocol: TCP
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: FallbackToLogsOnError
+          volumeMounts:
+          - mountPath: /etc/auth
+            name: auth
+          - mountPath: /etc/certs
+            name: certs
+        volumes:
+        - name: auth
+          secret:
+            secretName: $SERVICE-auth
+        - name: certs
+          secret:
+            secretName: $SERVICE-certs
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: $SERVICE
+  spec:
+    ports:
+    - port: 443
+      protocol: TCP
+      targetPort: 5000
+    selector:
+      app: $SERVICE
+    sessionAffinity: ClientIP
+    type: ClusterIP
+END

@@ -1,0 +1,4 @@
+#!/bin/sh -eu
+
+kubectl patch image.config.openshift.io/cluster --patch '{"spec":{"additionalTrustedCA":{"name":""}}}' --type=merge
+kubectl -n openshift-config delete configmap registry-config

@@ -1,0 +1,10 @@
+#!/bin/sh -eu
+
+NAMESPACE=${OCDEV_NAMESPACE:-$(ocdev current-namespace)}
+SERVICE=${OCDEV_SERVICE:-registry}
+
+NAMESPACE=${NAMESPACE:-default}
+HOSTNAME="$SERVICE.$NAMESPACE.svc"
+
+kubectl -n openshift-config create configmap registry-config --from-file="$HOSTNAME"="$OCDEV_VARDIR/certificates/ca.crt"
+kubectl patch image.config.openshift.io/cluster --patch '{"spec":{"additionalTrustedCA":{"name":"registry-config"}}}' --type=merge

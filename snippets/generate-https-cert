@@ -1,0 +1,49 @@
+#!/bin/bash -eu
+
+OUTDIR=$OCDEV_VARDIR/certificates
+HOSTNAME=$1
+
+openssl_server_config() {
+    cat <<END
+[req]
+distinguished_name = subject
+req_extensions = req_ext
+default_md = sha256
+prompt = no
+
+[subject]
+CN = ocdev@https-$(date +%s)
+
+[req_ext]
+END
+}
+
+openssl_servers_extfile() {
+    cat <<END
+[x509_ext]
+keyUsage = digitalSignature, keyEncipherment
+subjectAltName = @alternate_names
+
+[alternate_names]
+DNS.1 = $HOSTNAME
+END
+}
+
+ocdev generate-ca
+
+printf "=== %s\n" "$OUTDIR/$HOSTNAME/"
+
+if [ ! -d "$OUTDIR/$HOSTNAME" ]; then
+    mkdir -p "$OUTDIR/$HOSTNAME"
+    openssl genrsa -out "$OUTDIR/$HOSTNAME/key.pem" 2048
+    openssl req -new \
+        -key "$OUTDIR/$HOSTNAME/key.pem" \
+        -config <(openssl_server_config) \
+        -out "$OUTDIR/$HOSTNAME/server.csr"
+    openssl x509 -req \
+        -in "$OUTDIR/$HOSTNAME/server.csr" -CA "$OUTDIR/ca.crt" -CAkey "$OUTDIR/ca.key" -CAcreateserial \
+        -days 365 -extensions x509_ext -extfile <(openssl_servers_extfile) \
+        -out "$OUTDIR/$HOSTNAME/cert.pem"
+fi
+
+openssl x509 -in "$OUTDIR/$HOSTNAME/cert.pem" -noout -text
