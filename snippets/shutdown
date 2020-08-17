@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+
+CLUSTER_DIR=${OCDEV_CLUSTER_DIR:-$OCDEV_VARDIR/cluster}
+
+if ! [ -e "$CLUSTER_DIR" ]; then
+    warn "$CLUSTER_DIR does not exist"
+    exit 0
+fi
+
+AWS_PROFILE=${AWS_PROFILE:-openshift-dev}
+export AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id --profile="$AWS_PROFILE")
+export AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key --profile="$AWS_PROFILE")
+
+if [ -e "$CLUSTER_DIR/tools/openshift-install" ]; then
+    if [ -e "$CLUSTER_DIR/metadata.json" ]; then
+        "$CLUSTER_DIR/tools/openshift-install" destroy cluster --dir="$CLUSTER_DIR" "$@"
+    fi
+fi
+
+rm -rf "$CLUSTER_DIR"

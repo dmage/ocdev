@@ -4,8 +4,9 @@
 
 RC=0
 docker ps -aq | xargs -r docker rm -fv || RC=$?
-findmnt -n -l -o TARGET | grep ^/var/lib/origin | xargs -r sudo umount || RC=$?
-sudo rm -vrf "/var/lib/origin" || RC=$?
-sudo rm -vrf "./openshift.local.clusterup/" || RC=$?
-sudo rm -vrf "$OCDEV_ORIGIN_TOPLEVEL/openshift.local.clusterup/" || RC=$?
+#findmnt -n -l -o TARGET | grep ^/var/lib/origin | xargs -r sudo umount || RC=$?
+#sudo rm -vrf "/var/lib/origin" || RC=$?
+#sudo rm -vrf "./openshift.local.clusterup/" || RC=$?
+#sudo rm -vrf "$OCDEV_ORIGIN_TOPLEVEL/openshift.local.clusterup/" || RC=$?
+rm -vrf "$OCDEV_VARDIR/releases" || RC=$?
 exit $RC

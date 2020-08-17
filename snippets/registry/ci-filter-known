@@ -3,7 +3,9 @@ exec grep --line-buffered -E -v \
   -e '^I.* logs\.go:[0-9]+] http: TLS handshake error from .*: EOF' \
   -e 'level=error msg="Error statting blob sha256:.* in remote repository \\".*\\": Head .*: error parsing HTTP 429 response body:' \
   -e 'level=error msg="OpenShift access denied: no RBAC policy matched' \
+  -e 'level=error msg="auth token request for unsupported resource name: openshift"' \
   -e 'level=error msg="error closing blobwriter: blobwriter close after commit"' \
+  -e 'level=error msg="error getting secrets: <nil>"' \
   -e 'level=error msg="error resolving upload: blob upload unknown" .* http\.request\.method=DELETE' \
   -e 'level=error msg="error resolving upload: parsing time \\"\\"' \
   -e 'level=error msg="imageStream\.HasBlob: failed to get image stream: ImageStreamGetter:NotFound:' \
@@ -19,12 +21,12 @@ exec grep --line-buffered -E -v \
   -e 'level=error msg="response completed with error" err\.code="manifest unknown" err\.detail="unknown tag' \
   -e 'level=error msg="response completed with error" err\.code="manifest unknown" err\.message="manifest unknown"' \
   -e 'level=error msg="response completed with error" err\.code="name unknown" err\.message="repository name not known to registry"' \
+  -e 'level=error msg="response completed with error" err\.code=unknown err\.detail="ImageStream:Unknown: getImage: unable to get image digest sha256:.* in release: ImageGetter:NotFound: sha256:.*: images\.image\.openshift\.io \\"sha256:.*\\" not found"' \
   -e 'level=error msg="response completed with error" err\.code=unknown err\.detail="gcs: googleapi: got HTTP response code 400 with body: Bad Request" err\.message="unknown error" .* http\.request\.method=PATCH .* http\.request\.uri=".*/blobs/uploads/.*\?_state=.*"' \
   -e 'level=error msg="response completed with error" err\.code=unknown err\.detail="gcs: storage: can'"'"'t read object .*/startedat, status code: 400 Bad Request" err\.message="unknown error" .* http\.request\.method=PATCH .* http\.request\.uri=".*/blobs/uploads/.*\?_state=.*"' \
   -e 'level=error msg="response completed with error" err\.code=unknown err\.detail="http: unexpected EOF reading trailer" err\.message="unknown error" .* http\.request\.method=PATCH .* http\.request\.uri=".*/blobs/uploads/.*\?_state=.*"' \
   -e 'level=error msg="response completed with error" err\.code=unknown err\.detail="read tcp .*: read: connection reset by peer" err\.message="unknown error" .* http\.request\.method=PATCH' \
   -e 'level=error msg="response completed with error" err\.code=unknown err\.detail="unexpected EOF" err\.message="unknown error" .* http\.request\.method=PATCH .* http\.request\.uri=".*/blobs/uploads/.*\?_state=.*"' \
-  -e 'level=error msg="response completed with error" err\.code=unknown err\.detail="unexpected end of JSON input" err\.message="unknown error" .* http\.request\.method=(GET|HEAD) .* http\.request\.uri=.*/manifests/.*' \
   -e 'level=error msg="response completed with error" err\.code=unknown err\.detail=EOF err\.message="unknown error" .* http\.request\.method=PUT .* http\.request\.uri=".*/blobs/uploads/.*"' \
   -e 'level=error msg="response completed with error" err\.code=unsupported err\.message="The operation is unsupported\." .* http\.request\.method=DELETE' \
   -e 'level=error msg="unable to get manifest from image object: manifest is not present in image object' \

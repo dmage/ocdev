@@ -1,0 +1,52 @@
+#!/bin/sh
+set -eu
+
+PULL_SECRET=${OCDEV_PULL_SECRET:-$OCDEV_VARDIR/pull-secret.txt}
+CLUSTER_DIR=${OCDEV_CLUSTER_DIR:-$OCDEV_VARDIR/cluster}
+
+if ! [ -e "$PULL_SECRET" ]; then
+    fatal "The pull secret file $PULL_SECRET does not exist. You can get a new one from https://cloud.redhat.com/openshift/install/aws/installer-provisioned"
+fi
+
+if [ $# -ne 1 ]; then
+    AUTH=$(jq -r '.auths["registry.svc.ci.openshift.org"].auth // ""' <"$PULL_SECRET" | base64 -d)
+    if [ -n "$AUTH" ]; then
+        TAGS=$(boater -u "$(echo "$AUTH" | cut -d: -f1)" -p "$(echo "$AUTH" | cut -d: -f2-)" get-tags registry.svc.ci.openshift.org/ocp/release || true)
+    fi
+    if [ -z "$AUTH" ] || [ -z "$TAGS" ]; then
+        warn "The pull secret $PULL_SECRET does not have credentials for registry.svc.ci.openshift.org."
+        warn "If you are logged into the CI cluster, you can run"
+        warn "    oc registry login --to=$PULL_SECRET"
+        exit 1
+    fi
+
+    echo "$TAGS" | jq -r '.tags[]' | sort
+    exit
+fi
+
+if [ -e "$CLUSTER_DIR" ]; then
+    fatal "you already have a cluster, please shutdown it first (ocdev shutdown)"
+fi
+
+VERSION=$1
+AWS_PROFILE=${AWS_PROFILE:-openshift-dev}
+export AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id --profile="$AWS_PROFILE")
+export AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key --profile="$AWS_PROFILE")
+
+TOOLS_DIR="$OCDEV_VARDIR/releases/$VERSION"
+if ! [ -e "$TOOLS_DIR" ]; then
+    mkdir -p "$TOOLS_DIR/openshift-install"
+    oc adm release extract --tools --to "$TOOLS_DIR" -a "$PULL_SECRET" "registry.svc.ci.openshift.org/ocp/release:$VERSION"
+    tar -zxf "$TOOLS_DIR"/openshift-install-*.tar.gz -C "$TOOLS_DIR/openshift-install"
+fi
+
+mkdir -p "$CLUSTER_DIR/tools"
+cp "$TOOLS_DIR/openshift-install/openshift-install" "$CLUSTER_DIR/tools/openshift-install"
+
+echo "Pull Secret:"
+jq -c <"$PULL_SECRET"
+echo
+
+mkdir -p "$CLUSTER_DIR/tmp"
+cd "$CLUSTER_DIR"
+TMPDIR="$CLUSTER_DIR/tmp" "$CLUSTER_DIR/tools/openshift-install" create cluster --dir="$CLUSTER_DIR"

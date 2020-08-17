@@ -3,6 +3,8 @@
 IMAGE=$1
 
 cdpkg "github.com/openshift/cluster-image-registry-operator"
+oc apply -f ./vendor/github.com/openshift/api/imageregistry/v1/00-crd.yaml
+oc apply -f ./vendor/github.com/openshift/api/imageregistry/v1/01-crd.yaml
 make build-image IMAGE="$IMAGE"
 docker push "$IMAGE"
 ocdev registry disable-cvo

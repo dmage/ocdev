@@ -7,6 +7,7 @@ XDG_DATA_HOME=${XDG_DATA_HOME:-$HOME/.local/share}
 export OCDEV_VARDIR=${OCDEV_VARDIR:-$XDG_DATA_HOME/ocdev}
 export OCDEV_ORIGIN_PACKAGE=${OCDEV_ORIGIN_PACKAGE:-github.com/openshift/origin}
 export OCDEV_IMAGEREGISTRY_PACKAGE=${OCDEV_IMAGEREGISTRY_PACKAGE:-github.com/openshift/image-registry}
+export OCDEV_CLUSTERIMAGEREGISTRYOPERATOR_PACKAGE=${OCDEV_CLUSTERIMAGEREGISTRYOPERATOR_PACKAGE:-github.com/openshift/cluster-image-registry-operator}
 
 # {{{ usage
 
@@ -168,6 +169,7 @@ export OCDEV_BUILD_IMAGE_SAVE_TRAPS=
 ocdevutil-build-image-cleanup() {
     eval "$OCDEV_BUILD_IMAGE_SAVE_TRAPS"
     cd "$OCDEV_BUILD_IMAGE_PWD"
+    chmod -R u+w "$OCDEV_BUILD_IMAGE_TMP"
     rm -rf "$OCDEV_BUILD_IMAGE_TMP"
     OCDEV_BUILD_IMAGE_TMP=
     [ $# -eq 0 ] || exit "$1"
@@ -201,7 +203,7 @@ init() {
     os=$(go env GOHOSTOS)
     arch=$(go env GOHOSTARCH)
     export OCDEV_ORIG_PATH="$PATH"
-    for name in ORIGIN IMAGEREGISTRY; do
+    for name in ORIGIN IMAGEREGISTRY CLUSTERIMAGEREGISTRYOPERATOR; do
         eval 'pkg="$OCDEV_'$name'_PACKAGE"'
         if dir=$(pkgdir "$pkg"); then
             eval 'export OCDEV_'$name'_TOPLEVEL=$dir'
