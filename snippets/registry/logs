@@ -2,4 +2,6 @@
 
 # OCDEV HELP: Fetch the logs of the registry
 
-kubectl -n openshift-image-registry logs deploy/image-registry "$@"
+kubectl -n openshift-image-registry get pods -o name | grep ^pod/image-registry- | while read -r pod; do
+    kubectl -n openshift-image-registry logs "$pod" "$@"
+done

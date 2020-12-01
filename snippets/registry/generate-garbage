@@ -1,19 +1,18 @@
 #!/bin/bash -eu
 
 # OCDEV HELP: Generate some garbage
-
-REGISTRY=$(ocdefault registry info)
+set -x
+REGISTRY=$(oc registry info)
 
 docker-force-pull() {
     docker pull "$1"
     docker rmi -f "$(docker inspect --format="{{.ID}}" "$1")"
     docker pull "$1"
-    docker rmi "$1"
+    docker rmi -f "$1"
 }
 
-ocdev login-as-developer
 oc project myproject
-docker login -u $(oc whoami) -p $(oc whoami -t) $REGISTRY
+docker login -u "unused" -p "$(oc whoami -t)" $REGISTRY
 
 oc import-image dmage-a --from=dmage/example:a --confirm
 docker-force-pull $REGISTRY/myproject/dmage-a
@@ -21,14 +20,30 @@ oc import-image dmage-b --from=dmage/example:b --confirm
 docker-force-pull $REGISTRY/myproject/dmage-b
 oc delete is/dmage-b
 
-docker pull busybox
+docker pull busybox:uclibc
 docker pull busybox:glibc
-docker tag busybox $REGISTRY/myproject/busybox
+docker pull busybox:musl
+docker pull alpine
+docker tag busybox:uclibc $REGISTRY/myproject/busybox
 docker push $REGISTRY/myproject/busybox
 docker tag busybox:glibc $REGISTRY/myproject/busybox-glibc
 docker push $REGISTRY/myproject/busybox-glibc
 oc delete is/busybox-glibc
-ocdefault delete image $(ocdefault get images | grep -F /myproject/busybox-glibc@ | cut -d' ' -f1)
-docker tag busybox $REGISTRY/myproject/busybox-empty
+#oc delete image "$(oc get images | grep -F /myproject/busybox-glibc@ | cut -d' ' -f1)"
+docker tag busybox:uclibc $REGISTRY/myproject/busybox-empty
 docker push $REGISTRY/myproject/busybox-empty
 oc delete istag/busybox-empty:latest
+
+for i in busybox:uclibc busybox:glibc busybox:musl alpine; do
+    docker tag $i $REGISTRY/myproject/busybox-revisions
+    docker push $REGISTRY/myproject/busybox-revisions
+done
+
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    docker build -t $REGISTRY/myproject/clog:tag-$i - <<END
+FROM busybox
+RUN echo $i >/file
+END
+    docker push $REGISTRY/myproject/clog:tag-$i
+done
+oc delete is/clog

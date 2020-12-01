@@ -29,6 +29,12 @@ sub logrus_line {
         if ($orig_line =~ m/getImage: got image|getImageStream: got image stream|getImageStream: returning cached copy|as Docker Registry URL/) {
             return;
         }
+        if ($orig_line =~ m/level=info/) {
+            return;
+        }
+        if ($orig_line =~ m/Registry does not implement RempositoryRemover\. Will not be able to delete repos and tags/) {
+            return;
+        }
         print "$orig_line\n";
         return;
     }
@@ -159,13 +165,15 @@ sub format_record {
     return $s;
 }
 
+my $found = {};
+my $skipped = {};
 while (my ($http_request_id, $records) = each(%$requests)) {
     my $request = make_request($records);
 
     my @problems;
 
     my $duration = get_duration($request);
-    if ($duration >= 10 && $request->{http_request_method} ne "PATCH") {
+    if ($duration >= 60 && $request->{http_request_method} ne "PATCH") {
         push(@problems, "duration: ${duration}s");
     }
 
@@ -192,12 +200,19 @@ while (my ($http_request_id, $records) = each(%$requests)) {
             # it's suspicious, but it might happen
         } elsif ($request->{records}->[-1]->{msg} =~ /^error authorizing context: access denied$|^invalid token:/) {
             push(@problems, "access denied");
+        } elsif ($request->{records}->[-1]->{msg} =~ /^error authorizing context: /) {
+            push(@problems, "authorization failed");
         } else {
-            push(@problems, "still in progress");
+            push(@problems, "cannot find http.response.status, the request hasn't finished yet?");
         }
     }
 
     if (@problems) {
+        my $key = ($request->{http_request_method} // "")." ".($request->{http_request_uri} // "").": ".join(", ", @problems);
+        if ($found->{$key}++ >= 5) {
+            $skipped->{$key}++;
+            next;
+        }
         print "REQUEST $http_request_id\n";
         print "\n";
         foreach my $key (qw(http_request_method http_request_uri openshift_auth_user openshift_auth_userid vars_name vars_reference vars_digest)) {
@@ -213,4 +228,8 @@ while (my ($http_request_id, $records) = each(%$requests)) {
         }
         print "\n";
     }
+}
+
+while (my ($key, $skipped) = each(%$skipped)) {
+    print "Skipped $skipped more requests that are similar to above $key\n";
 }

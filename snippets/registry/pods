@@ -1,0 +1,5 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: List registry pods
+
+kubectl -n openshift-image-registry get pods -l docker-registry=default "$@"
