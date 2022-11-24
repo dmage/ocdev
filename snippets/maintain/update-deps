@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -eu
+
+PKG=$1
+BRANCH=$2
+KUBERNETES_VERSION=$3
+OPENSHIFT_VERSION=${4:-$BRANCH}
+
+KUBERNETES_PRODUCT_VERSION=$(echo $KUBERNETES_VERSION | sed 's/v0/v1/')
+
+list_kubernetes_deps() {
+	cat go.mod | sed -n 's/ v.*//;/\tk8s.io\//p' | grep -v \
+		-e k8s.io/klog \
+		-e k8s.io/kube-openapi \
+		-e k8s.io/utils \
+	;
+}
+
+list_openshift_deps() {
+	cat go.mod | sed -n 's/ v.*//;/\tgithub.com\/openshift\//p'
+}
+
+cdpkg "$PKG"
+git checkout "$BRANCH"
+list_kubernetes_deps | while read -r dep; do
+    echo $dep
+    go mod edit -require="$dep@$KUBERNETES_VERSION"
+    go mod tidy
+done
+list_openshift_deps | while read -r dep; do
+    echo $dep
+    go mod edit -require="$dep@$OPENSHIFT_VERSION"
+    go mod tidy
+done
+go mod vendor

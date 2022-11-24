@@ -9,18 +9,18 @@ if ! [ -e "$PULL_SECRET" ]; then
 fi
 
 if [ $# -ne 1 ]; then
-    AUTH=$(jq -r '.auths["registry.svc.ci.openshift.org"].auth // ""' <"$PULL_SECRET" | base64 -d)
+    AUTH=$(jq -r '.auths["registry.ci.openshift.org"].auth // ""' <"$PULL_SECRET" | base64 -d)
     if [ -n "$AUTH" ]; then
-        TAGS=$(boater -u "$(echo "$AUTH" | cut -d: -f1)" -p "$(echo "$AUTH" | cut -d: -f2-)" get-tags registry.svc.ci.openshift.org/ocp/release || true)
+        TAGS=$(boater -u "$(echo "$AUTH" | cut -d: -f1)" -p "$(echo "$AUTH" | cut -d: -f2-)" get-tags registry.ci.openshift.org/ocp/release || true)
     fi
     if [ -z "$AUTH" ] || [ -z "$TAGS" ]; then
-        warn "The pull secret $PULL_SECRET does not have credentials for registry.svc.ci.openshift.org."
+        warn "The pull secret $PULL_SECRET does not have credentials for registry.ci.openshift.org."
         warn "If you are logged into the CI cluster, you can run"
-        warn "    oc registry login --to=$PULL_SECRET"
+        warn "    oc --context=app.ci registry login --to=$PULL_SECRET"
         exit 1
     fi
 
-    echo "$TAGS" | sort
+    echo "$TAGS" | sort -V
     exit
 fi
 
@@ -36,7 +36,7 @@ export AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key --profile
 TOOLS_DIR="$OCDEV_VARDIR/releases/$VERSION"
 if ! [ -e "$TOOLS_DIR" ]; then
     mkdir -p "$TOOLS_DIR/openshift-install"
-    oc adm release extract --tools --to "$TOOLS_DIR" -a "$PULL_SECRET" "registry.svc.ci.openshift.org/ocp/release:$VERSION"
+    oc adm release extract --tools --to "$TOOLS_DIR" -a "$PULL_SECRET" "registry.ci.openshift.org/ocp/release:$VERSION"
     tar -zxf "$TOOLS_DIR"/openshift-install-*.tar.gz -C "$TOOLS_DIR/openshift-install"
 fi
 
@@ -50,3 +50,7 @@ echo
 mkdir -p "$CLUSTER_DIR/tmp"
 cd "$CLUSTER_DIR"
 TMPDIR="$CLUSTER_DIR/tmp" "$CLUSTER_DIR/tools/openshift-install" create cluster --dir="$CLUSTER_DIR"
+
+echo ""
+echo "The cluster is ready, don't forget to use its config:"
+echo "export KUBECONFIG=$CLUSTER_DIR/auth/kubeconfig"

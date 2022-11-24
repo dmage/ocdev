@@ -1,0 +1,211 @@
+#!/bin/sh -eu
+
+RELEASE="$HOME/src/github.com/openshift/release"
+
+"$RELEASE/ci-operator/step-registry/quay/install-ocs-operator/quay-install-ocs-operator-commands.sh"
+"$RELEASE/ci-operator/step-registry/quay/install-quay-operator/quay-install-quay-operator-commands.sh"
+"$RELEASE/ci-operator/step-registry/quay/install-quay/quay-install-quay-commands.sh"
+"$RELEASE/ci-operator/step-registry/quay/create-admin/quay-create-admin-commands.sh"
+
+exit
+
+
+create_namespace() {
+    local namespace=$1
+    echo >&2 "--- creating namespace $namespace"
+    cat <<EOF | oc apply -f -
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: $namespace
+EOF
+}
+
+create_operatorgroup() {
+    local namespace=$1 target_namespace=$2 operatorgroup
+    echo >&2 "--- creating operatorgroup in namespace $namespace"
+    operatorgroup=$(oc -n "$namespace" get operatorgroup -o name)
+    if [ -z "$operatorgroup" ]; then
+        oc create -f - <<EOF
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  generateName: og-
+  namespace: $namespace
+spec:
+  targetNamespaces: [$target_namespace]
+EOF
+    else
+        echo "$operatorgroup"
+    fi
+}
+
+create_redhat_subscription() {
+    local namespace=$1 name=$2 channel=$3 sub csv
+    echo >&2 "--- creating subscription in namespace $namespace: $name ($channel)"
+    sub=$(
+        cat <<EOF | oc apply -f - -o jsonpath='{.metadata.name}'
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: $name
+  namespace: $namespace
+spec:
+  channel: $channel
+  installPlanApproval: Automatic
+  name: $name
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+EOF
+    )
+
+    for _ in {1..60}; do
+        csv=$(oc -n "$namespace" get subscription "$sub" -o jsonpath='{.status.installedCSV}' || true)
+        if [ -n "$csv" ]; then
+            if [ "$(oc -n "$namespace" get csv "$csv" -o jsonpath='{.status.phase}')" = "Succeeded" ]; then
+                echo >&2 "ClusterServiceVersion \"$csv\" is ready"
+                return 0
+            fi
+        fi
+        oc -n "$namespace" get subscription "$sub" -o json | jq -e '.status.conditions[] | select(.type != "InstallPlanPending") | select(.status == "True")' && return 1 || true
+        sleep 10
+    done
+
+    echo >&2 "Timed out waiting for CSV to become ready"
+    return 1
+}
+
+install_redhat_operator() {
+    local namespace=$1 name=$2 channel=$3 target_namespaces=$4
+    create_namespace "$namespace"
+    create_operatorgroup "$namespace" "$target_namespaces"
+    create_redhat_subscription "$namespace" "$name" "$channel"
+}
+
+scale_up_cluster() {
+    local machineset current
+    machineset=$(oc -n openshift-machine-api get machinesets -o name | head -n1)
+    current=$(oc -n openshift-machine-api get "$machineset" -o jsonpath='{.spec.template.spec.providerSpec.value.instanceType}:{.spec.replicas}')
+    if [ "$current" = "m5.large:2" ]; then
+        echo >&2 "--- scaling up machineset $machineset"
+        oc -n openshift-machine-api patch "$machineset" --type=merge -p '{"spec":{"replicas":4,"template":{"spec":{"providerSpec":{"value":{"instanceType":"m5.xlarge"}}}}}}'
+    fi
+}
+
+install_quay() {
+cat <<EOF | oc apply -f -
+apiVersion: noobaa.io/v1alpha1
+kind: NooBaa
+metadata:
+  name: noobaa
+  namespace: openshift-storage
+spec:
+  dbType: postgres
+  dbResources:
+    requests:
+      cpu: '0.1'
+      memory: 1Gi
+  coreResources:
+    requests:
+      cpu: '0.1'
+      memory: 1Gi
+EOF
+
+create_namespace quay
+
+cat <<EOF | oc apply -f -
+apiVersion: quay.redhat.com/v1
+kind: QuayRegistry
+metadata:
+  name: quay
+  namespace: quay
+spec:
+  components:
+  - kind: clair
+    managed: false
+EOF
+
+for _ in {1..60}; do
+    if [[ "$(oc -n quay get quayregistry quay -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' || true)" == "True" ]]; then
+        echo "Quay is ready"
+        return 0
+    fi
+    sleep 10
+done
+echo "Timed out waiting for Quay to become ready"
+return 1
+}
+
+add_super_users() {
+    while :; do
+        config_secret="$(oc -n quay get pod -l quay-component=quay-app -o go-template='{{range .items}}{{range .spec.volumes}}{{if eq .name "configvolume"}}{{.secret.secretName}}{{"\n"}}{{end}}{{end}}{{end}}')"
+        if [ "$(echo "$config_secret" | wc -l)" -eq 1 ]; then
+            break
+        fi
+        echo >&2 "got $(echo "$config_secret" | wc -l) secrets"
+        sleep 5
+    done
+    if ! oc -n quay get secret "$config_secret" -o 'go-template={{index .data "config.yaml" | base64decode}}' | grep -q 'SUPER_USERS'; then
+        config_yaml_base64="$(
+            (
+                oc -n quay get secret "$config_secret" -o 'go-template={{index .data "config.yaml" | base64decode}}'
+                echo 'SUPER_USERS: ["admin"]'
+            ) | base64
+        )"
+        oc -n quay patch secret "$config_secret" --type=merge -p '{"data":{"config.yaml":"'$config_yaml_base64'"}}'
+    fi
+}
+
+scale_up_cluster
+
+#install_redhat_operator "openshift-storage" "ocs-operator" "stable-4.8" "openshift-storage"
+install_redhat_operator "openshift-storage" "ocs-operator" "" "openshift-storage"
+install_redhat_operator "openshift-operators" "quay-operator" "quay-v3.5" ""
+oc apply -f $HOME/quayregistries.quay.redhat.com.crd.yaml
+install_quay
+
+sleep 10 # why?..
+add_super_users
+
+token=$(LC_ALL=C tr -dc A-Za-z0-9 </dev/urandom | head -c 40)
+
+oc -n quay wait pods -l quay-component=quay-app --for=condition=ready --timeout=60s
+
+# oc patch images.config.openshift.io/cluster --type=merge -p '{"spec":{"registrySources":{"insecureRegistries":["bar"]}}}'
+
+quay_app_pod=$(oc -n quay get pods -l quay-component=quay-app -o name)
+
+oc -n quay rsh "$quay_app_pod" python <<EOF
+from app import app
+from data import model
+from data.database import configure
+
+if hasattr(model.oauth, 'create_user_access_token'):
+    create_user_access_token = model.oauth.create_user_access_token
+else:
+    create_user_access_token = model.oauth.create_access_token_for_testing
+
+scope="org:admin repo:admin repo:create repo:read repo:write super:user user:admin user:read"
+
+configure(app.config)
+
+admin_user = model.user.create_user("admin", "p@ssw0rd", "admin@localhost.local", auto_verify=True)
+operator_org = model.organization.create_organization("quay-bridge-operator", "quay-bridge-operator@localhost.local", admin_user)
+operator_app = model.oauth.create_application(operator_org.id, "quay-bridge-operator", "", "")
+create_user_access_token(admin_user, operator_app.client_id, scope, access_token="$token")
+EOF
+
+oc delete pods -n quay -l quay-component=quay-app
+for _ in {1..30}; do
+    ready=$(oc -n quay get pods -l quay-component=quay-app -o jsonpath='{.items[*].status.containerStatuses[*].ready}')
+    if [ "$ready" = "true" ]; then
+        echo >&2 "Quay is running"
+        break
+    fi
+    sleep 10
+done
+
+registry=$(oc -n quay get quayregistry quay -o jsonpath='{.status.registryEndpoint}')
+
+set -x
+curl -k -H "Authorization: Bearer $token" "$registry/api/v1/superuser/users/"

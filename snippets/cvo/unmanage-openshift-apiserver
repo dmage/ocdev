@@ -1,0 +1,26 @@
+#!/bin/bash -eu
+
+# OCDEV HELP: Make the image registry operator unmanaged by Cluster Version Operator
+
+OVERRIDES=$(kubectl get clusterversion/version -o jsonpath='{.spec.overrides}')
+if [ -z "$OVERRIDES" ]; then
+    kubectl patch clusterversion version --type json -p '
+    - op: replace
+      path: /spec/overrides
+      value: []
+    '
+fi
+
+CURRENT=$(kubectl get clusterversion/version -o jsonpath='{.spec.overrides[?(@.name=="openshift-apiserver-operator")].name}')
+if [ -z "$CURRENT" ]; then
+    kubectl patch clusterversion version --type json -p '
+    - op: add
+      path: /spec/overrides/-
+      value:
+        group: apps/v1
+        kind: Deployment
+        name: openshift-apiserver-operator
+        namespace: openshift-apiserver-operator
+        unmanaged: true
+    '
+fi

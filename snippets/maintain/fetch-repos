@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -eu
+
+CORE_PKGS=(
+    github.com/openshift/api
+    github.com/openshift/client-go
+    github.com/openshift/library-go
+)
+
+_dep_git_id() {
+    local v
+    if ! v=$(go list -m "$1" 2>/dev/null); then
+        exit 0
+    fi
+    echo "$v " | cut -d' ' -f2 | cut -d'-' -f3
+}
+
+_filter_git_log() {
+    sed -n '1{p;d;}; ${p;d;}; /origin\//{p;d;}; s/.*/.../p' | uniq -c | sed 's/^ *\([0-9]*\) ...$/... \1 more commit(s)/;s/^ *1 //';
+}
+
+_check_dep() {
+    local pkg="$1" branch="$2" old_branch="$3" target="$4"
+    (
+        cdpkg "$pkg"
+        if ! git merge-base --is-ancestor "$target" "$branch"; then
+            echo >&2 "ERROR: $pkg $branch doesn't have $target"
+            exit 1
+        fi
+        if [ -n "$old_branch" ]; then
+            if git merge-base --is-ancestor "$target" "$old_branch"; then
+                echo >&2 "WARNING: $pkg $target belongs to the previous version"
+            fi
+        fi
+        #git --no-pager log --color=always --date=short --pretty=tformat:"%C(yellow)%h %C(blue)%cd %C(green)%<(16,trunc)%aN%C(reset) %s%C(red)% D%C(reset)" "$target..$branch" | _filter_git_log
+    )
+}
+
+_sync_branch() {
+    echo >&2 "Syncing branch $1..."
+    git checkout --quiet "$1"
+    git merge --quiet --ff "origin/$1"
+
+    for dep in "${CORE_PKGS[@]}"; do
+        git_id=$(_dep_git_id "$dep")
+        if [ -n "$git_id" ]; then
+            _check_dep "$dep" "$1" "${2-}" "$git_id"
+        fi
+    done
+}
+
+_handle() {
+    local git_id
+    echo >&2 "Syncing $1..."
+    cdpkg "$1"
+    if ! git diff-index --quiet HEAD; then
+        git status
+        echo >&2 "The repository $1 is not clean. Aborting."
+        exit 1
+    fi
+    git fetch --quiet -p origin
+    _sync_branch release-4.9
+    _sync_branch release-4.10 release-4.9
+    _sync_branch release-4.11 release-4.10
+    _sync_branch release-4.12 release-4.11
+    _sync_branch master
+    echo >&2 ""
+}
+
+for pkg in "${CORE_PKGS[@]}"; do
+    _handle "$pkg"
+done
+
+_handle github.com/openshift/image-registry
+_handle github.com/openshift/cluster-image-registry-operator
+_handle github.com/openshift/openshift-apiserver
+_handle github.com/openshift/cluster-openshift-apiserver-operator

@@ -2,6 +2,7 @@
 
 SERVICE=${OCDEV_SERVICE:-registry}
 
+kubectl delete route "$SERVICE"
 kubectl delete service "$SERVICE"
 kubectl delete deployment "$SERVICE"
 kubectl delete secret "$SERVICE-auth"

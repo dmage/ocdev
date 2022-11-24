@@ -7,6 +7,8 @@ use warnings;
 
 use Time::Local qw(timegm);
 
+my $strict = ($ENV{"OCDEV_STRICT"} // "") eq "1";
+
 my $requests = {};
 
 sub logrus_line {
@@ -173,8 +175,12 @@ while (my ($http_request_id, $records) = each(%$requests)) {
     my @problems;
 
     my $duration = get_duration($request);
-    if ($duration >= 60 && $request->{http_request_method} ne "PATCH") {
-        push(@problems, "duration: ${duration}s");
+    if ($duration >= 60) {
+        my $patch = ($request->{http_request_method} eq "PATCH");
+        my $get_blob = ($request->{http_request_method} eq "GET" && $request->{http_request_uri} =~ m"/blobs/[^/]+$");
+        if (!$patch && !$get_blob) {
+            push(@problems, "duration: " . (int($duration/10)*10) . "s");
+        }
     }
 
     if (my $status = get_status_record($request)) {
@@ -199,11 +205,21 @@ while (my ($http_request_id, $records) = each(%$requests)) {
         } elsif ($request->{records}->[-1]->{msg} eq "anonymous token request") {
             # it's suspicious, but it might happen
         } elsif ($request->{records}->[-1]->{msg} =~ /^error authorizing context: access denied$|^invalid token:/) {
-            push(@problems, "access denied");
+            if ($strict) {
+                push(@problems, "access denied");
+            }
         } elsif ($request->{records}->[-1]->{msg} =~ /^error authorizing context: /) {
             push(@problems, "authorization failed");
         } else {
             push(@problems, "cannot find http.response.status, the request hasn't finished yet?");
+        }
+    }
+
+    if ($strict) {
+        foreach my $record (@$records) {
+            if ($record->{level} eq "error") {
+                push(@problems, "error message");
+            }
         }
     }
 

@@ -1,0 +1,31 @@
+#!/bin/bash -eu
+
+IMAGE=docker.io/dmage/openshift-apiserver
+
+cdpkg "github.com/openshift/openshift-apiserver"
+docker build -f ./images/Dockerfile.rhel -t "$IMAGE" .
+docker push "$IMAGE"
+ocdev cvo unmanage-openshift-apiserver
+REF=$(docker inspect "$IMAGE" | jq -r '.[0].RepoDigests[0]')
+oc -n openshift-apiserver-operator patch deploy openshift-apiserver-operator \
+    -p "$(jq -nc --arg IMAGE "$REF" '{
+        "spec": {
+            "template": {
+                "spec": {
+                    "containers": [
+                        {
+                            "name": "openshift-apiserver-operator",
+                            "env": [
+                                {
+                                    "name": "IMAGE",
+                                    "value": $IMAGE
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    }')"
+oc wait co openshift-apiserver --for=condition=Degraded=True --timeout=5m
+oc wait co openshift-apiserver --for=condition=Degraded=False --timeout=5m

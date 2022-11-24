@@ -124,12 +124,7 @@ fatal() {
 export -f fatal
 
 pkgdir() {
-    local dir
-    dir=$(cd / && go list -e -f '{{.Dir}}' "$1")
-    if [ -z "$dir" ]; then
-        return 1
-    fi
-    printf "%s\n" "$dir"
+    printf "%s\n" "$GOPATH/src/$1"
 }
 export -f pkgdir
 

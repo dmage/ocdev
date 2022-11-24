@@ -79,3 +79,5 @@ items:
     sessionAffinity: ClientIP
     type: ClusterIP
 END
+
+oc create route passthrough registry --service=registry
