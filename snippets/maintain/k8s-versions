@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 set -eu
+cd /
 go list -m -versions k8s.io/api | cut -d' ' -f2- | tr ' ' '\n'

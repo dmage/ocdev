@@ -1,0 +1,26 @@
+#!/bin/bash -eu
+AWS_CREDS="$HOME/.aws/credentials"
+BASE_DOMAIN=devcluster.openshift.com
+BUCKET_NAME=obulatov-hypershift
+CLUSTER_NAME=obulatovguest1
+PULL_SECRET="$HOME/.local/share/ocdev/pull-secret.txt"
+REGION=us-east-2
+
+export AWS_PROFILE=openshift-dev
+
+#aws route53 create-hosted-zone --name "$BASE_DOMAIN" --caller-reference "$(whoami)-$(date +%F)"
+aws s3api create-bucket --acl public-read --bucket "$BUCKET_NAME" \
+  --create-bucket-configuration LocationConstraint="$REGION" \
+  --region "$REGION"
+hypershift install \
+  --oidc-storage-provider-s3-bucket-name $BUCKET_NAME \
+  --oidc-storage-provider-s3-credentials $AWS_CREDS \
+  --oidc-storage-provider-s3-region $REGION
+hypershift create cluster aws \
+  --name $CLUSTER_NAME \
+  --node-pool-replicas=3 \
+  --base-domain $BASE_DOMAIN \
+  --pull-secret $PULL_SECRET \
+  --aws-creds $AWS_CREDS \
+  --region $REGION \
+  --generate-ssh

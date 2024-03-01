@@ -1,0 +1,3 @@
+#!/bin/bash -eu
+AWS_PROFILE=openshift-dev hypershift destroy cluster aws --name obulatovguest1 --aws-creds ~/.aws/credentials --destroy-cloud-resources
+AWS_PROFILE=openshift-dev aws s3api delete-bucket --bucket obulatov-hypershift

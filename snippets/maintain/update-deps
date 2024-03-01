@@ -5,31 +5,56 @@ PKG=$1
 BRANCH=$2
 KUBERNETES_VERSION=$3
 OPENSHIFT_VERSION=${4:-$BRANCH}
+AWS_SDK_GO_VERSION=${5:--}
 
 KUBERNETES_PRODUCT_VERSION=$(echo $KUBERNETES_VERSION | sed 's/v0/v1/')
 
 list_kubernetes_deps() {
-	cat go.mod | sed -n 's/ v.*//;/\tk8s.io\//p' | grep -v \
-		-e k8s.io/klog \
-		-e k8s.io/kube-openapi \
-		-e k8s.io/utils \
-	;
+    if [ "$KUBERNETES_VERSION" == "-" ]; then
+        return
+    fi
+    cat go.mod | sed -n 's/ v.*//;/\tk8s.io\//p' | grep -v \
+        -e k8s.io/klog \
+        -e k8s.io/kube-openapi \
+        -e k8s.io/utils \
+    ;
 }
 
 list_openshift_deps() {
-	cat go.mod | sed -n 's/ v.*//;/\tgithub.com\/openshift\//p'
+    if [ "$KUBERNETES_VERSION" == "-" ]; then
+        return
+    fi
+    cat go.mod | sed -n 's/ v.*//;/\tgithub.com\/openshift\//p'
 }
 
 cdpkg "$PKG"
 git checkout "$BRANCH"
 list_kubernetes_deps | while read -r dep; do
-    echo $dep
     go mod edit -require="$dep@$KUBERNETES_VERSION"
     go mod tidy
 done
 list_openshift_deps | while read -r dep; do
-    echo $dep
     go mod edit -require="$dep@$OPENSHIFT_VERSION"
     go mod tidy
 done
+if [ "$AWS_SDK_GO_VERSION" != "-" ]; then
+    go mod edit -require="github.com/aws/aws-sdk-go@$AWS_SDK_GO_VERSION"
+    go mod tidy
+fi
 go mod vendor
+git branch -d bump-deps || true
+git checkout -b bump-deps
+git add go.* vendor/
+git diff --cached go.*
+git status
+read -p "Do you want to commit the changes? [y/N] " -r REPLY
+case $REPLY in
+    [yY])
+        ;;
+    *)
+        echo "Aborting..."
+        exit 1
+        ;;
+esac
+git commit -m "Bump dependencies"
+gh pr create --base "$BRANCH" --title "Bump dependencies"
